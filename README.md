@@ -27,7 +27,7 @@ Free, open source, no ads, no accounts, no tracking. One HTML page that runs in 
 
 **Easiest (any phone):** open the link above in Chrome, then menu **⋮ → Add to Home screen** (or **Install app**). It then opens full screen and works offline.
 
-**Android APK:** every push builds an APK with GitHub Actions. Open the **Actions** tab, pick the latest *Build Android APK* run, and download `nexus-grid-apk`. It is a debug build signed with a throwaway key, so Android will ask you to allow installing from your browser or file manager.
+**Android APK:** download `NEXUS-GRID-v7.0.apk` from [Releases](https://github.com/Lotusborn19/nexus-grid/releases/latest). It is a debug build signed with a throwaway key, so Android will ask you to allow installing it.
 
 ## Real device control: the Termux bridge
 
