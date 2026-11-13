@@ -80,6 +80,6 @@ public class MainActivity extends Activity {
     /** Lets the page know it is running inside the Android app (see isInstalled() in the page). */
     private static class NativeBridge {
         @JavascriptInterface
-        public String version() { return "7.0"; }
+        public String version() { return "7.1"; }
     }
 }

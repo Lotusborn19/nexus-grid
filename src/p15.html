@@ -5,7 +5,7 @@ function focusOrder(){   // runs at start(), once every app is registered
     ['Learn',['academy','sandbox','algo','blueprint','news']],
     ['Device',['shell','control','system','automate','bridge']],
     ['Play',['games']],
-    ['You',['ai','profile','notes','codex','guard','settings']],
+    ['You',['ai','feedback','profile','notes','codex','guard','settings']],
     ['Community',['feed','flash','crews','suggest','friends','market']]
   ],order=[];
   groups.forEach(function(g){g[1].forEach(function(id){if(APPS[id]){APPS[id].cat=g[0];order.push(id)}})});

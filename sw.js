@@ -1,6 +1,6 @@
 // NEXUS // GRID service worker — makes the app open offline.
 // Bump VERSION whenever index.html changes so installed copies pick up the new build.
-const VERSION = 'nexus-7.0.0';
+const VERSION = 'nexus-7.1.0';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {

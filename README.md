@@ -71,7 +71,7 @@ After changing the page, bump `VERSION` in `sw.js` so installed copies update.
 
 ## Feedback
 
-Open an issue with the **Feedback** template. The most useful thing you can tell me is which part you would actually come back for.
+Inside the app, open **Feedback** (in the You group); it goes straight to me. Or open an issue with the **Feedback** template. The most useful thing you can tell me is which part you would actually come back for.
 
 ## License
 

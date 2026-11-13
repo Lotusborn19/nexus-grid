@@ -462,6 +462,9 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center}
 .ststep.done .stn{background:var(--green);color:#02140a}
 .ststep.done .stt b{text-decoration:line-through}
 .sthide{background:none;border:0;color:var(--mute);font:10px var(--mono);cursor:pointer;margin-left:8px;text-decoration:underline}
+.fbrate{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px}
+.fbrate button{padding:12px 0;border:1px solid var(--edge);border-radius:9px;background:var(--ink);color:var(--dim);font:700 15px var(--display);cursor:pointer}
+.fbrate button.on{background:rgba(var(--acc),.18);border-color:var(--green);color:var(--green-soft);box-shadow:var(--glow)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 @media (prefers-reduced-motion:reduce){.ruhex path{stroke-dashoffset:0}}
 </style>
@@ -518,7 +521,7 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center}
 <nav id="task" aria-label="Taskbar">
   <button id="startbtn" type="button">⬢ APPS</button>
   <div id="tasks"></div>
-  <div id="tray">NEXUS GRID v7.0<br><span id="up">UP 00:00:00</span></div>
+  <div id="tray">NEXUS GRID v7.1<br><span id="up">UP 00:00:00</span></div>
 </nav>
 
 <div id="start" hidden>
@@ -544,6 +547,8 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center}
     <div class="rus" id="ruSub"></div>
   </div>
 </div>
+<!-- static copy of the feedback form so Netlify registers it at deploy time; the app posts to it with fetch -->
+<form name="feedback" data-netlify="true" netlify-honeypot="bot-field" hidden><input name="bot-field"><input name="rating"><input name="type"><textarea name="message"></textarea><input name="comeback"><input name="contact"><input name="handle"><input name="device"></form>
 <div id="toast" role="status"></div>
 
 <script>
@@ -670,7 +675,7 @@ function rain(){
 }
 function bootFacts(){
   var n=navigator,cn=n.connection,ok=true;try{localStorage.setItem('grid:_probe','1');localStorage.removeItem('grid:_probe')}catch(e){ok=false}
-  var f=['NEXUS // GRID 7.0 \u00b7 '+(n.platform||'web')];
+  var f=['NEXUS // GRID 7.1 \u00b7 '+(n.platform||'web')];
   if(n.hardwareConcurrency)f.push('cpu      '+n.hardwareConcurrency+' logical cores');
   if(n.deviceMemory)f.push('memory   ~'+n.deviceMemory+' GB reported by device');
   f.push('display  '+screen.width+'x'+screen.height+' @'+(window.devicePixelRatio||1)+'x');
@@ -1644,7 +1649,7 @@ function wallRender(){
 
 /* ================= apply crafted icons to apps + content (called from start, after all apps exist) ================= */
 function applyIcons(){
-  var AI={algo:'bars',feed:'feed',flash:'flash',crews:'crews',suggest:'suggest',academy:'academy',blueprint:'blueprint',games:'games',sandbox:'sandbox',control:'control',automate:'timer',shell:'shell',system:'pulse',bridge:'plug',profile:'profile',friends:'friends',news:'news',market:'market',ai:'companion',notes:'notes',codex:'code',guard:'guard',settings:'settings'};
+  var AI={feedback:'chat',algo:'bars',feed:'feed',flash:'flash',crews:'crews',suggest:'suggest',academy:'academy',blueprint:'blueprint',games:'games',sandbox:'sandbox',control:'control',automate:'timer',shell:'shell',system:'pulse',bridge:'plug',profile:'profile',friends:'friends',news:'news',market:'market',ai:'companion',notes:'notes',codex:'code',guard:'guard',settings:'settings'};
   Object.keys(AI).forEach(function(id){if(APPS[id])APPS[id].icon=ic(AI[id])});
   var CI={cs:'code',termux:'termux',web:'web',gamedev:'gamedev',robotics:'robot',promptai:'ai',computers:'computer',linux:'termux',python:'code',coding:'code',ai:'ai',pcbuild:'computer',electrical:'electrical',content:'media',video:'media',unreal:'unreal'};
   if(typeof COURSES!=='undefined')COURSES.forEach(function(c){c.ic=ic(CI[c.id]||'academy','ic-lg')});
@@ -2093,6 +2098,7 @@ function palCommands(){
   c.push({k:'action',t:'Crew standings',s:'Social',i:ic('crews'),run:crewStandingsModal});
   c.push({k:'action',t:'Achievements',s:'You',i:ic('medal'),run:function(){openApp('profile')}});
   c.push({k:'action',t:(SFX.on?'Mute':'Unmute')+' sound',s:'Config',i:ic('pulse'),run:function(){SFX.on=!SFX.on;LS.set('grid:sfx',SFX.on?'1':'0');toast('sound '+(SFX.on?'on':'off'))}});
+  c.push({k:'action',t:'Send feedback',s:'to the developer',i:ic('chat'),run:function(){openApp('feedback')}});
   c.push({k:'action',t:'Close all windows',s:'desktop',i:ic('control'),run:function(){Object.keys(openApps).forEach(closeApp)}});
   return c;
 }
@@ -2504,7 +2510,7 @@ function oraLocalCmd(q){
 
 /* console API — poke the GRID from devtools (and from the test rig) */
 window.NX={
-  version:'7.0',
+  version:'7.1',
   act:function(k,v){return gridAct(k,v)},        // NX.act('open','arcade')
   ev:function(t){return GE(t)},                  // NX.ev('win')
   crewOp:function(){return crewOp()},
@@ -2746,7 +2752,7 @@ function focusOrder(){   // runs at start(), once every app is registered
     ['Learn',['academy','sandbox','algo','blueprint','news']],
     ['Device',['shell','control','system','automate','bridge']],
     ['Play',['games']],
-    ['You',['ai','profile','notes','codex','guard','settings']],
+    ['You',['ai','feedback','profile','notes','codex','guard','settings']],
     ['Community',['feed','flash','crews','suggest','friends','market']]
   ],order=[];
   groups.forEach(function(g){g[1].forEach(function(id){if(APPS[id]){APPS[id].cat=g[0];order.push(id)}})});
@@ -2799,6 +2805,60 @@ function paintInstall(){
 if('serviceWorker' in navigator&&hosted()&&document.querySelector('link[rel="manifest"]')){
   window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})});
 }
+
+
+
+/* ===== p16 ===== */
+
+/* ================= FEEDBACK — goes straight to the developer (Netlify Forms) ================= */
+var FB_ENDPOINT='https://nexus-grid-xuzj.netlify.app/';   // Netlify accepts form posts at any path on the site
+function fbContext(){
+  var where=window.NexusNative?'android-app':isInstalled()?'installed-web':/netlify\.app$/.test(location.hostname)?'web':location.protocol==='file:'?'local-file':location.hostname||'unknown';
+  return 'v7.1 · '+where+' · '+innerWidth+'x'+innerHeight+' · '+(navigator.userAgent||'').replace(/\s+/g,' ').slice(0,160);
+}
+function fbSend(data){
+  var body=new URLSearchParams(Object.assign({'form-name':'feedback','bot-field':''},data)).toString();
+  // no-cors: a plain form post that works from the website, the installed app and the Android app alike.
+  // The response can't be read cross-origin, so a network failure is the only error we can detect.
+  return fetch(FB_ENDPOINT,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body});
+}
+APPS.feedback={name:'Feedback',icon:'',cat:'You',w:460,h:620,
+ render:function(b){
+   var rating=0;
+   b.innerHTML='<h3 class="h">SEND FEEDBACK</h3><div class="sub">this goes straight to the developer · bugs, ideas, anything</div>'+
+     '<div class="card"><h4><span>HOW IS IT SO FAR?</span><span class="mu" id="fbRateTxt">tap a number</span></h4><div class="fbrate" id="fbRate"></div></div>'+
+     '<div class="card"><h4><span>WHAT’S IT ABOUT?</span></h4><div class="tabs" id="fbType" style="margin:0">'+
+       ['bug','idea','confusing','praise'].map(function(t,i){return '<button class="tab'+(i?'':' on')+'" type="button" data-t="'+t+'">'+t.toUpperCase()+'</button>'}).join('')+'</div></div>'+
+     '<div class="col"><textarea class="in" id="fbMsg" maxlength="2000" placeholder="what happened, or what would make NEXUS better?" style="min-height:120px"></textarea>'+
+     '<input class="in" id="fbUse" maxlength="120" placeholder="which part would you come back for? (optional)">'+
+     '<input class="in" id="fbContact" maxlength="120" placeholder="email or @handle if you want a reply (optional)">'+
+     '<label class="mu" style="display:flex;align-items:center;gap:10px;font-size:11px;margin:0;cursor:pointer;line-height:1.5"><input type="checkbox" id="fbDev" checked style="flex:none;width:18px;height:18px"> include device info (app version, screen size, browser)</label>'+
+     '<button class="btn pri" id="fbGo" type="button" style="width:100%;padding:13px">SEND</button>'+
+     '<div class="mu" id="fbNote" style="font-size:10.5px;line-height:1.6">Only what you type here is sent, plus device info if ticked. Your notes, XP and profile are never sent.</div></div>';
+   var rr=$('#fbRate',b),labels=['','rough','meh','ok','good','love it'];
+   [1,2,3,4,5].forEach(function(n){var x=el('button','',String(n));x.type='button';x.setAttribute('aria-label','rate '+n+' of 5');
+     x.onclick=function(){rating=n;$$('button',rr).forEach(function(y,i){y.classList.toggle('on',i<n)});$('#fbRateTxt',b).textContent=n+' / 5 · '+labels[n]};rr.appendChild(x)});
+   $$('#fbType .tab',b).forEach(function(t){t.onclick=function(){$$('#fbType .tab',b).forEach(function(x){x.classList.remove('on')});t.classList.add('on')}});
+   $('#fbGo',b).onclick=function(){
+     var msg=$('#fbMsg',b).value.trim(),go=this;
+     if(!msg&&!rating)return toast('add a rating or a message first');
+     var last=+LS.get('grid:fbLast')||0;if(now()-last<30000)return toast('sent just now — give it a few seconds');
+     go.disabled=true;go.textContent='SENDING…';
+     fbSend({rating:rating?String(rating):'',type:$('#fbType .tab.on',b).dataset.t,message:msg,comeback:$('#fbUse',b).value.trim(),
+       contact:$('#fbContact',b).value.trim(),handle:ME.handle,device:$('#fbDev',b).checked?fbContext():''})
+     .then(function(){
+       LS.set('grid:fbLast',String(now()));
+       b.innerHTML='<div class="empty" style="margin-top:20px">feedback sent — thank you.<br>the developer reads every one.</div><button class="btn ghost" id="fbMore" type="button" style="width:100%;margin-top:12px">send another</button>';
+       $('#fbMore',b).onclick=function(){APPS.feedback.render(b)};
+       addXP(10,'sent feedback');
+     },function(){
+       go.disabled=false;go.textContent='SEND';
+       toast('could not send — are you offline?');
+       $('#fbNote',b).innerHTML='Couldn’t reach the server. Your text is still here; try again when you’re online, or open an issue on <a href="https://github.com/Lotusborn19/nexus-grid/issues" target="_blank" rel="noopener">GitHub</a>.';
+     });
+   };
+ }};
+APP_ORDER.push('feedback');
 
 
 

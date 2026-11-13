@@ -3,7 +3,7 @@
 const fs=require('fs'),path=require('path'),here=__dirname;
 const rd=f=>fs.readFileSync(path.join(here,f),'utf8');
 const P1=rd('p1.html'),P2=rd('p2.html');
-let js='';['p3','p4','p5','p6','p7','p9','p10','p11','p12','p13','p14','p15','p8'].forEach(f=>{
+let js='';['p3','p4','p5','p6','p7','p9','p10','p11','p12','p13','p14','p15','p16','p8'].forEach(f=>{
   js+='\n/* ===== '+f+' ===== */\n'+rd(f+'.html').replace(/<\/?script>/g,'')+'\n';
 });
 try{new Function(js)}catch(e){console.error('JS ERROR:',e.message);process.exit(1)}

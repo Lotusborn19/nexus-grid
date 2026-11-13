@@ -49,7 +49,7 @@
 <nav id="task" aria-label="Taskbar">
   <button id="startbtn" type="button">⬢ APPS</button>
   <div id="tasks"></div>
-  <div id="tray">NEXUS GRID v7.0<br><span id="up">UP 00:00:00</span></div>
+  <div id="tray">NEXUS GRID v7.1<br><span id="up">UP 00:00:00</span></div>
 </nav>
 
 <div id="start" hidden>
@@ -75,4 +75,6 @@
     <div class="rus" id="ruSub"></div>
   </div>
 </div>
+<!-- static copy of the feedback form so Netlify registers it at deploy time; the app posts to it with fetch -->
+<form name="feedback" data-netlify="true" netlify-honeypot="bot-field" hidden><input name="bot-field"><input name="rating"><input name="type"><textarea name="message"></textarea><input name="comeback"><input name="contact"><input name="handle"><input name="device"></form>
 <div id="toast" role="status"></div>

@@ -16,6 +16,7 @@ function palCommands(){
   c.push({k:'action',t:'Crew standings',s:'Social',i:ic('crews'),run:crewStandingsModal});
   c.push({k:'action',t:'Achievements',s:'You',i:ic('medal'),run:function(){openApp('profile')}});
   c.push({k:'action',t:(SFX.on?'Mute':'Unmute')+' sound',s:'Config',i:ic('pulse'),run:function(){SFX.on=!SFX.on;LS.set('grid:sfx',SFX.on?'1':'0');toast('sound '+(SFX.on?'on':'off'))}});
+  c.push({k:'action',t:'Send feedback',s:'to the developer',i:ic('chat'),run:function(){openApp('feedback')}});
   c.push({k:'action',t:'Close all windows',s:'desktop',i:ic('control'),run:function(){Object.keys(openApps).forEach(closeApp)}});
   return c;
 }

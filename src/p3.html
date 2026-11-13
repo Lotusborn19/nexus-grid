@@ -119,7 +119,7 @@ function rain(){
 }
 function bootFacts(){
   var n=navigator,cn=n.connection,ok=true;try{localStorage.setItem('grid:_probe','1');localStorage.removeItem('grid:_probe')}catch(e){ok=false}
-  var f=['NEXUS // GRID 7.0 \u00b7 '+(n.platform||'web')];
+  var f=['NEXUS // GRID 7.1 \u00b7 '+(n.platform||'web')];
   if(n.hardwareConcurrency)f.push('cpu      '+n.hardwareConcurrency+' logical cores');
   if(n.deviceMemory)f.push('memory   ~'+n.deviceMemory+' GB reported by device');
   f.push('display  '+screen.width+'x'+screen.height+' @'+(window.devicePixelRatio||1)+'x');
