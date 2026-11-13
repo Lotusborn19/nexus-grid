@@ -1,0 +1,28 @@
+<script>
+/* ================= seed content ================= */
+var SEED_IDS={p1:1,p2:1,p3:1};   // ids of demo posts shipped in older builds — purged on sight
+var NEWS=[
+ {s:'The Hacker News',cat:'cyber',u:'https://thehackernews.com',d:'Daily cybersecurity news: breaches, vulnerabilities and malware campaigns.'},
+ {s:'Krebs on Security',cat:'cyber',u:'https://krebsonsecurity.com',d:'Investigative deep-dives into how breaches really happen.'},
+ {s:'PortSwigger Research',cat:'web',u:'https://portswigger.net/research',d:'The team behind Burp Suite publishes the sharpest web-security research online.'},
+ {s:'Hackaday',cat:'hardware',u:'https://hackaday.com',d:'Daily hardware hacks, ESP32 projects and teardown culture.'},
+ {s:'MIT Tech Review',cat:'cs',u:'https://www.technologyreview.com',d:'Computer-science and AI trends, explained for people who build.'},
+ {s:'IEEE Spectrum',cat:'robotics',u:'https://spectrum.ieee.org',d:'Robotics and engineering news from the IEEE.'},
+ {s:'Game Developer',cat:'gamedev',u:'https://www.gamedeveloper.com',d:'Postmortems and craft articles from working game developers.'},
+ {s:'OWASP',cat:'web',u:'https://owasp.org/www-project-top-ten/',d:'The canonical list every web developer should be able to recite.'}
+];
+var MARKET=[];   // nothing is listed until it has a real link
+/* ---- challenges (run in the jail; flag checked locally by hash) ---- */
+function h32(s){var h=5381;for(var i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))>>>0;return h}
+var CHALLENGES=[
+ {id:'c1',name:'recon: whoami',skill:'web',xp:20,brief:'Every session starts by knowing who you are and where you stand. Run `whoami`, then submit your username as the flag.',hint:'type: whoami',flag:h32('operator'),check:function(v){return h32(v.trim())===h32('operator')}},
+ {id:'c2',name:'files: hidden in plain sight',skill:'web',xp:30,brief:'A secret file is in this jail. List all files including hidden ones (`ls -a`), read the dotfile, and submit what it contains.',hint:'ls -a then cat .secret',flag:h32('grid{ls_minus_a}'),check:function(v){return v.trim()==='grid{ls_minus_a}'}},
+ {id:'c3',name:'decode: base of it all',skill:'crypto',xp:30,brief:'Decode this base64 string and submit the plaintext:\n\n`Z3JpZHtiYXNlNjRfaXNfbm90X2VuY3J5cHRpb259`',hint:'echo "...." | base64 -d',flag:h32('grid{base64_is_not_encryption}'),check:function(v){return v.trim()==='grid{base64_is_not_encryption}'}},
+ {id:'c4',name:'grep: needle in the logs',skill:'network',xp:40,brief:'A fake auth.log is in the jail. Find the line with a failed root login and submit the IP address that tried it.',hint:'grep "Failed" auth.log',flag:h32('10.13.37.66'),check:function(v){return v.trim()==='10.13.37.66'}},
+ {id:'c5',name:'cipher: rot thirteen',skill:'crypto',xp:30,brief:'Caesar never dies. Decode: `tevq{ebg13_vf_n_pynffvp}`',hint:'rot13 shifts letters by 13',flag:h32('grid{rot13_is_a_classic}'),check:function(v){return v.trim().toLowerCase()==='grid{rot13_is_a_classic}'}},
+ {id:'c6',name:'grep: count the fails',skill:'network',xp:40,brief:'Open auth.log and count how many FAILED password attempts it contains. Submit just the number.\n\nTry `grep Failed auth.log` or `grep -c Failed auth.log`.',hint:'grep -c Failed auth.log',flag:h32('2'),check:function(v){return v.trim()==='2'}},
+ {id:'c7',name:'reverse: backwards',skill:'reversing',xp:35,brief:'The file backwards.txt holds a flag written backwards. Reverse it and submit the real flag.\n\nTry `rev backwards.txt`.',hint:'rev backwards.txt',flag:h32('grid{reading_backwards}'),check:function(v){return v.trim()==='grid{reading_backwards}'}},
+ {id:'c8',name:'hex: decode the bytes',skill:'crypto',xp:40,brief:'Decode this hex string into text:\n\n`677269647b6865785f6465636f6465647d`\n\nTry `hex -d 677269647b6865785f6465636f6465647d`.',hint:'two hex digits = one character',flag:h32('grid{hex_decoded}'),check:function(v){return v.trim()==='grid{hex_decoded}'}},
+ {id:'c9',name:'strings: buried secret',skill:'web',xp:35,brief:'A binary file dump.bin has a flag hidden in the noise. Pull the readable text out of it.\n\nTry `strings dump.bin`.',hint:'strings dump.bin',flag:h32('grid{strings_reveal_all}'),check:function(v){return v.trim()==='grid{strings_reveal_all}'}}
+];
+</script>

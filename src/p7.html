@@ -1,0 +1,298 @@
+<script>
+/* ---------- FRIENDS ---------- */
+function friends(){return LS.j('grid:friends',[{h:'ctrlzero',c:'#00ff7b',rank:'ROOT',founder:true}])}
+function addFriend(h,c){var f=friends();if(f.some(function(x){return x.h===h}))return;f.push({h:h,c:c||'#00ff7b'});LS.sj('grid:friends',f);if(openApps.friends)APPS.friends.render($('.wbody',openApps.friends));addXP(5,'new connection')}
+APPS.friends={name:'Network',icon:'🕸️',cat:'Social',w:420,h:520,
+ render:function(b){
+   var f=friends();
+   b.innerHTML='<h3 class="h">NETWORK</h3><div class="sub">handles you’ve saved · '+f.length+'</div>'+
+     '<div class="row" style="margin-bottom:12px"><input class="in" id="frAdd" placeholder="add by handle…" style="flex:1"><button class="btn pri" id="frGo" type="button">+ add</button></div>'+
+     '<div class="col" id="frList"></div>'+
+     '<div class="mu" style="margin-top:14px;font-size:11px;line-height:1.7">Save the handles of people you actually know. Nothing is suggested or invented here.</div>';
+   var list=$('#frList',b);
+   f.forEach(function(x){var n=el('div','lb');n.innerHTML=avatar(x.h,x.c)+'<div><b class="handle">@'+esc(x.h)+'</b><div class="rank">'+(x.founder?'FOUNDER · built the GRID':'saved by you')+'</div></div>'+(x.founder?'':'<button class="btn sm ghost" type="button" style="margin-left:auto" data-rm="'+esc(x.h)+'">remove</button>');list.appendChild(n)});
+   $('#frGo',b).onclick=function(){var h=$('#frAdd',b).value.trim().replace(/\s+/g,'_');if(h){addFriend(h);$('#frAdd',b).value=''}};
+   $$('[data-add]',b).forEach(function(bn){bn.onclick=function(){addFriend(bn.dataset.add);bn.textContent='following';bn.disabled=true}});
+   $$('[data-rm]',b).forEach(function(bn){bn.onclick=function(){LS.sj('grid:friends',friends().filter(function(x){return x.h!==bn.dataset.rm}));APPS.friends.render(b)}});
+ }};
+
+/* ---------- ACADEMY ---------- */
+var COURSES=[
+ {id:'termux',ic:'📟',t:'Pocket Linux: Termux',tag:'beginner',by:'Lotus',lessons:[
+   {t:'What Termux is',b:"Termux is a full Linux environment on Android — no root. You get a real **bash** shell and a package manager called `pkg`.\n\nInstall it from **F-Droid**, never the Play Store version (it's abandoned). First commands:\n```\npkg update && pkg upgrade -y\npkg install python git nano -y\n```"},
+   {t:'Navigating files',b:"Everything in Linux is a file. Core moves:\n```\npwd   # where am I\nls -la # list all, with detail\ncd dir # change directory\n```\nTab-completes names. `~` is home."},
+   {t:'Your first script',b:"Make a file and run it:\n```\nnano hello.py\n# type: print('hack the planet')\npython hello.py\n```\nYou just automated your phone."}],
+  quiz:[{q:'Where should you install Termux from?',a:['Google Play','F-Droid','A random APK site'],c:1},{q:'What does `pwd` do?',a:['Prints working directory','Changes password','Lists packages'],c:0}]},
+ {id:'web',ic:'🕸️',t:'Web Hacking 101',tag:'web',by:'GRID',lessons:[
+   {t:'How the web breaks',b:"Most web vulns come from **trusting user input**. The OWASP Top 10 is your map — learn injection, broken auth, and access control first.\n\nPractice **only** on legal targets: PortSwigger Academy, DVWA, Juice Shop. Never a live site you don't own."},
+   {t:'Recon basics',b:"Before anything, map the target you're *authorised* to test:\n```\n# directories & files\ncurl -s https://TARGET/robots.txt\n# check for exposed git\ncurl -s https://TARGET/.git/HEAD\n```\nAn exposed `.git` is a classic win — it leaks source and secrets."},
+   {t:'Reading a request',b:"Every request has a method, path, headers and body. Learn to read and replay them with Burp Suite (community edition is free). Change one parameter at a time and watch the response."}],
+  quiz:[{q:'Where do most web vulnerabilities come from?',a:['Slow servers','Trusting user input','Old fonts'],c:1},{q:'Is it legal to scan any site you find?',a:['Yes, if curious','Only with permission/your own'],c:1}]},
+ {id:'gamedev',ic:'🎮',t:'Game Dev: First Loop',tag:'gamedev',by:'GRID',lessons:[
+   {t:'The game loop',b:"Every game is a loop: **input → update → render**, many times a second.\n```\nwhile running:\n    handle_input()\n    update_world(dt)\n    draw()\n```\nStart in the browser with JS + canvas, or Python + pygame."},
+   {t:'Scope is the boss',b:"The #1 killer of solo games is scope. Your first game should be finishable in a weekend: one mechanic, one screen. Ship small, ship often."}],
+  quiz:[{q:'What are the three steps of a game loop?',a:['Load, save, quit','Input, update, render','Buy, build, sell'],c:1}]},
+ {id:'robotics',ic:'🤖',t:'Robotics + ESP32',tag:'hardware',by:'Lotus',lessons:[
+   {t:'Why ESP32',b:"The ESP32 is a cheap microcontroller with WiFi + Bluetooth built in. Perfect brain for a robot, sensor node, or DIY gadget. Flash it with MicroPython or Arduino."},
+   {t:'Blink, then move',b:"Every hardware project starts with blinking an LED — your 'hello world'. Then you drive a motor through a driver board (never straight from a GPIO pin), and add a servo with PWM. One PCA9685 board can run 16 servos."}],
+  quiz:[{q:'What does the ESP32 have built in?',a:['A screen','WiFi and Bluetooth','A battery'],c:1}]},
+ {id:'promptai',ic:'🧠',t:'Master Prompt AI',tag:'ai',by:'Lotus',lessons:[
+   {t:'How AI actually works',b:"A language model is a super-powered **next-word predictor**. It reads your whole conversation and continues it in the most likely helpful way. Your prompt is the steering wheel.\n\nSix facts every prompter must know:\n1. It **predicts**, it doesn't look things up (unless search/files are on).\n2. It only knows what's **in the conversation** — paste the context in.\n3. It has a **context window** (short-term memory in tokens). Start fresh chats for new tasks.\n4. It has a **knowledge cutoff** — use search for anything recent.\n5. It's **a little random** — regenerate a weak answer instead of giving up.\n6. It **fills gaps with guesses** — your job is to leave fewer gaps."},
+   {t:'The 6 building blocks',b:"Every great prompt answers six questions:\n\n- **Role** — who the AI should act as\n- **Task** — the exact job, as an action verb\n- **Context** — who it's for, why, what you tried\n- **Examples** — a sample of what you want\n- **Format** — the shape of the answer\n- **Constraints** — the rules and limits\n\n**Task and Context matter most.** Role matters least. You don't need all six every time, but when the result matters, run through all six."},
+   {t:'Clarity & the master template',b:"AI can't read your mind — **specific prompts get specific results**. Use action verbs, give numbers, name the audience, say what TO do (not just what not to do), and explain the *why* behind a rule so the AI can generalize it.\n\n```\nYou are a [role / expert].\nTask: [action verb + exactly what you want].\nContext:\n- Who it's for: [audience]\n- Why I need it: [goal]\n- What I have/tried: [details]\nExample of what I like: [sample]\nFormat: [list/table/email/code], about [length].\nRules: [must do] / [must avoid].\nIf anything's unclear, ask me up to 3 questions first.\n```"},
+   {t:'Show, don\'t tell (few-shot)',b:"When style or format is hard to describe, **show an example** — this is few-shot prompting.\n\n- **Zero-shot:** instructions only (simple tasks)\n- **One-shot:** one example (locks a format)\n- **Few-shot:** 2–5 examples (specific style or tricky classification)\n\nRules: make examples **varied** (or the AI copies accidental details), match the **quality** you want, and label them clearly (e.g. wrap in `<example>` tags) so they aren't read as instructions. To make AI sound like *you*, paste 2–3 things you've written and say \"write the new piece in this voice.\""}],
+  quiz:[{q:'What is an AI model really doing?',a:['Looking facts up in a database','Predicting the most likely next text','Copying from the internet live'],c:1},{q:'Which two building blocks matter most?',a:['Role and Format','Task and Context','Examples and Constraints'],c:1},{q:'Why give varied few-shot examples?',a:['So the AI learns the pattern, not accidental shared details','To make the prompt longer','It doesn\'t matter'],c:0}]},
+ {id:'computers',ic:'💻',t:'How Computers Work',tag:'beginner',by:'Tech Book',lessons:[
+   {t:'The core idea',b:"A computer stores, retrieves, and processes **data** — everything else is detail. The **CPU** does the thinking, **RAM** is fast short-term memory, **storage** (SSD/HDD) is long-term, and the **bus** moves data between them. Every phone, car and satellite runs on these same principles."},
+   {t:'Bits, bytes & binary',b:"Computers only know **0 and 1** (off/on). 8 bits = 1 **byte**. A byte can hold 256 values — enough for one letter. Kilo/mega/giga/tera each multiply by ~1000. When you understand that text, images and video are all just numbers, the whole machine stops being magic."}],
+  quiz:[{q:'What does RAM do?',a:['Stores files forever','Fast short-term working memory','Connects to the internet'],c:1},{q:'How many bits in a byte?',a:['4','8','16'],c:1}]},
+ {id:'linux',ic:'🐧',t:'Linux Foundations',tag:'linux',by:'Tech Book',lessons:[
+   {t:'Why Linux rules the world',b:"Linux powers **96% of the top web servers**, every one of the world's fastest supercomputers, Android, and most IoT devices. It's free, open-source, and the foundation of nearly all professional dev and security work. Learn it once and it transfers everywhere."},
+   {t:'The shell is the power',b:"The **shell** (bash/zsh) is how pros drive Linux. Core moves:\n```\npwd   # where am I\nls -la # list everything\ncd /path # move\nchmod +x file # make runnable\nsudo cmd # run as admin\nman cmd # read the manual\n```\nEverything is a file, and small tools piped together (`cat log | grep error | wc -l`) do huge jobs."}],
+  quiz:[{q:'What is the shell?',a:['A screensaver','The text interface that drives Linux','A type of RAM'],c:1},{q:'What does `chmod +x` do?',a:['Deletes a file','Makes a file executable','Encrypts a file'],c:1}]},
+ {id:'python',ic:'🐍',t:'Python From Zero',tag:'python',by:'Tech Book',lessons:[
+   {t:'Why Python',b:"Python is the **#1 language** worldwide. Instagram, YouTube, Netflix, Spotify and NASA run on it. It's the primary language for AI/ML, data science, backends and security tools — and it reads almost like English."},
+   {t:'The building blocks',b:"Variables hold data, functions reuse logic, loops repeat, conditionals decide.\n```\nname = input('Your handle? ')\nfor i in range(3):\n    if i == 2:\n        print(f'Welcome, {name}!')\n```\nInstall libraries with `pip install requests`. Keep projects isolated with `python -m venv env`."}],
+  quiz:[{q:'What is Python best known for?',a:['Only games','AI/ML, data & automation','Nothing serious'],c:1},{q:'How do you install a library?',a:['pip install name','download the internet','pkg get name'],c:0}]},
+ {id:'coding',ic:'⌨️',t:'Think Like a Coder',tag:'web',by:'Tech Book',lessons:[
+   {t:'Universal concepts',b:"Beyond any language, every developer uses the same ideas: **variables, functions, loops, conditionals, data structures** (lists, maps) and **algorithms**. Learn the concepts and new languages become just new spelling."},
+   {t:'How pros actually work',b:"Real coding is: break the problem into tiny pieces, build one piece, test it, commit with **git**, repeat. Read error messages — they tell you exactly what's wrong. Google + docs + AI are part of the job, not cheating."}],
+  quiz:[{q:'What should you do with an error message?',a:['Ignore it','Read it — it tells you what\'s wrong','Restart the computer'],c:1}]},
+ {id:'ai',ic:'🤯',t:'AI Demystified',tag:'ai',by:'Tech Book',lessons:[
+   {t:'It\'s math, not magic',b:"AI is **statistics + data**, not sentience. A neural network is layers of simple math that learn patterns from examples. **Training** adjusts millions of weights until predictions get good; **inference** is using the trained model. The more (and cleaner) the data, the better it learns."},
+   {t:'The main families',b:"**Machine learning** learns from data. **Deep learning** uses many-layer networks for images, speech and language. **LLMs** (like the one powering ORACLE) predict text. Knowing which tool fits which problem puts you ahead of almost everyone."}],
+  quiz:[{q:'What is AI fundamentally?',a:['Magic','Math and statistics over data','A human in a server'],c:1},{q:'What does training do?',a:['Adjusts the model\'s weights from examples','Downloads answers','Nothing'],c:0}]},
+ {id:'pcbuild',ic:'🔧',t:'Build a PC',tag:'hardware',by:'Tech Book',lessons:[
+   {t:'Why build your own',b:"A custom build gives **20–40% more performance per dollar** than pre-builts, which cut corners on PSUs and RAM. You learn exactly how the machine works and can upgrade one part at a time."},
+   {t:'The 7 core parts',b:"**CPU** (brain), **motherboard** (nervous system), **RAM** (short-term memory), **GPU** (graphics/AI), **storage** (SSD), **PSU** (clean power — never cheap out here), and **case/cooling** (airflow). Match the socket, check wattage, seat everything firmly, and cable-manage for airflow."}],
+  quiz:[{q:'Which part should you never cheap out on?',a:['The RGB lights','The power supply (PSU)','The case fans'],c:1}]},
+ {id:'electrical',ic:'⚡',t:'Electrical Fundamentals',tag:'hardware',by:'Tech Book',lessons:[
+   {t:'Voltage, current, resistance',b:"Electricity powers every device. **Voltage (V)** is the push, **current (A)** is the flow, **resistance (Ω)** slows it. Ohm's Law ties them together: **V = I × R**. Get this one equation and most circuits make sense."},
+   {t:'Reading a circuit',b:"Current flows from **+ to −** through a closed loop. Components in **series** share one path (current same, voltage splits); in **parallel** they branch (voltage same, current splits). Always add a resistor before an LED, and never exceed a component's rated voltage."}],
+  quiz:[{q:'What is Ohm\'s Law?',a:['V = I × R','E = mc²','P = 2πr'],c:0},{q:'In a series circuit, what stays the same?',a:['Voltage','Current','Nothing'],c:1}]},
+ {id:'content',ic:'🎬',t:'Content Creator Path',tag:'media',by:'Tech Book',lessons:[
+   {t:'Hobby vs. career',b:"Creators build real businesses from a bedroom. The difference is understanding **platforms, algorithms, and monetization**. Pick one platform, post consistently, and study what your best videos share. The algorithm rewards watch-time and retention — hook people in the first 3 seconds."},
+   {t:'The money stack',b:"Income rarely comes from one source: **ad revenue, sponsorships, your own products, memberships, affiliates**. Diversify early. One engaged thousand-fan audience beats a million passive followers."}],
+  quiz:[{q:'What do algorithms reward most?',a:['Watch-time and retention','Long titles','Posting once a year'],c:0}]},
+ {id:'video',ic:'🎞️',t:'Video Production',tag:'media',by:'Tech Book',lessons:[
+   {t:'The pipeline',b:"Every video follows: **plan → shoot → edit → color → audio → publish**. Beginners obsess over cameras; pros know **good audio and lighting** matter more than an expensive body. Natural light + a cheap lav mic beats a 4K camera in a dark, echoey room."},
+   {t:'Editing that keeps viewers',b:"Cut the boring parts ruthlessly. Keep energy high: tight cuts, B-roll over talking, captions for sound-off viewers. Color-grade last for a consistent look. Export H.264 for the web — it's the universal format."}],
+  quiz:[{q:'What matters more than an expensive camera?',a:['Audio and lighting','The tripod brand','Megapixels'],c:0}]},
+ {id:'unreal',ic:'🎮',t:'Unreal Engine 5',tag:'gamedev',by:'Tech Book',lessons:[
+   {t:'The most powerful free engine',b:"Unreal Engine 5 is used in AAA games, Hollywood films, live TV and VR — and it's free. **Nanite** streams film-quality geometry; **Lumen** does real-time global illumination. You can build worlds without touching C++ thanks to **Blueprints** (visual scripting)."},
+   {t:'Your first scene',b:"Start in a template, drop in assets from the free Quixel/Fab library, light it with a sky + directional light, and use Blueprints to make things interactive (open a door, pick up an item). Ship small — a single polished room beats an unfinished open world."}],
+  quiz:[{q:'What is Blueprints in Unreal?',a:['A paper plan','Visual scripting — code without text','A texture pack'],c:1}]}
+];
+var acState={};
+APPS.academy={name:'Academy',icon:'🎓',cat:'Learn',w:640,h:600,
+ render:function(b){acHome(b)}};
+function acHome(b){
+  b.innerHTML='<h3 class="h">ACADEMY</h3><div class="sub">study paths for hackers, builders &amp; makers · finish a lesson, earn XP</div><div class="grid2" id="acGrid"></div>';
+  var g=$('#acGrid',b);
+  COURSES.forEach(function(c){
+    var prog=LS.j('grid:course:'+c.id,{done:[]}),pc=Math.round(prog.done.length/(c.lessons.length+1)*100);
+    var card=el('button','course');card.type='button';
+    card.innerHTML='<div class="tile-ic">'+c.ic+'</div><div class="ttl">'+esc(c.t)+'</div><div class="mu" style="font-size:11px">'+c.lessons.length+' lessons · '+esc(c.by)+'</div><span class="tag '+(c.tag==='web'?'c':c.tag==='hardware'?'v':'a')+'">'+c.tag+'</span><div class="track" style="margin-top:6px"><div class="fill" style="width:'+pc+'%"></div></div>';
+    card.onclick=function(){acCourse(b,c)};g.appendChild(card);
+  });
+}
+function acCourse(b,c){
+  var prog=LS.j('grid:course:'+c.id,{done:[]});
+  b.innerHTML='<button class="btn ghost sm" id="acBack" type="button">◄ academy</button><h3 class="h" style="margin-top:8px">'+c.ic+' '+esc(c.t)+'</h3><div class="sub">by '+esc(c.by)+'</div><div class="col" id="acL"></div>';
+  $('#acBack',b).onclick=function(){acHome(b)};
+  var L=$('#acL',b);
+  c.lessons.forEach(function(ls,i){
+    var done=prog.done.indexOf(i)>=0;
+    var card=el('div','card');
+    card.innerHTML='<h4><span>LESSON '+(i+1)+' // '+esc(ls.t)+'</span>'+(done?'<span class="ok">✓ done</span>':'')+'</h4><div class="lesson">'+md(ls.b)+'</div><button class="btn '+(done?'ghost':'pri')+' sm" type="button" style="margin-top:8px">'+(done?'review ✓':'mark complete +15xp')+'</button>';
+    $('button',card).onclick=function(){if(prog.done.indexOf(i)<0){prog.done.push(i);LS.sj('grid:course:'+c.id,prog);addXP(15,'lesson done');skillUp(c.tag,15);bumpQuest('learn');GE('lesson');acCourse(b,c)}};
+    L.appendChild(card);
+  });
+  if(c.quiz){
+    var qc=el('div','card');qc.innerHTML='<h4><span>KNOWLEDGE CHECK</span><span>+'+(c.quiz.length*10)+'xp</span></h4><div class="quiz" id="acQ"></div>';
+    L.appendChild(qc);acQuiz($('#acQ',qc),c,prog,b);
+  }
+}
+function acQuiz(box,c,prog,b){
+  var i=0,score=0;
+  function ask(){
+    if(i>=c.quiz.length){box.innerHTML='<div class="note ok" style="border-color:var(--edge)">quiz complete · '+score+'/'+c.quiz.length+' correct</div>';
+      if(score===c.quiz.length&&prog.done.indexOf('q')<0){prog.done.push('q');LS.sj('grid:course:'+c.id,prog);addXP(c.quiz.length*10,'aced the quiz');skillUp(c.tag,20);if(ME.badges.indexOf(c.id+'-grad')<0){ME.badges.push(c.id+'-grad');saveMe();paintProfileBits()}}return}
+    var q=c.quiz[i];box.innerHTML='<div><b>Q'+(i+1)+'.</b> '+esc(q.q)+'</div>';
+    q.a.forEach(function(opt,j){var bn=el('button','btn ghost sm');bn.type='button';bn.textContent=opt;bn.onclick=function(){if(j===q.c){score++;toast('correct ✓')}else toast('not quite');i++;ask()};box.appendChild(bn)});
+  }
+  ask();
+}
+function skillUp(tag,n){var map={web:'web',hardware:'hardware',gamedev:'reversing',beginner:'web'};var k=map[tag]||'web';ME.skills[k]=(ME.skills[k]||0)+n;saveMe()}
+
+/* ---------- SANDBOX (jailed terminal + challenges) ---------- */
+var JAIL={
+  '.secret':'grid{ls_minus_a}\n',
+  'readme.txt':'Welcome to the NEXUS sandbox jail.\nThis is a SAFE, simulated shell — nothing here touches a real device.\nType `help`, or `missions` to see challenges.\n',
+  'auth.log':'Oct 31 02:11:04 grid sshd[991]: Accepted password for operator from 10.0.0.5\nOct 31 02:14:55 grid sshd[992]: Failed password for root from 10.13.37.66 port 44122\nOct 31 02:15:01 grid sshd[992]: Failed password for admin from 10.0.0.9 port 44123\n',
+  'flag.sh':'#!/bin/sh\necho "flags are earned, not printed"\n',
+  'backwards.txt':'}sdrawkcab_gnidaer{dirg\n',
+  'dump.bin':'\u0003\u0001Qz\u0000grid{strings_reveal_all}\u0000\u0007\u0002k9k1\u0001',
+  'relay.log':'09:41:02 relay chk node-a 10.66.0.2 ok\n09:41:02 relay chk node-c 10.66.0.7 ok\n09:41:03 relay ALERT beacon -> 10.66.0.13 every 30s (unregistered)\n09:41:05 relay chk node-d 10.66.0.9 ok\n',
+  'payload.b64':'ZXhmaWwgY2hhbm5lbDogcG9ydCA0NDU3IGtleT1ORU9OLURVU0s=\n',
+  '.vault':'# svc creds (stored reversed, obviously)\nn00m_d1rg:pukcab_cvs\n',
+  'netmap.cfg':'# lab vm segment map\nnode A 10.66.0.2 ok\nnode B 10.66.0.13 QUARANTINE\nkillswitch 677269647b626c61636b6f75745f636f6e7461696e65647d\n'
+};
+var sbState={cwd:'~',hist:[],hi:0,active:null};
+APPS.sandbox={name:'Sandbox',icon:'▮',cat:'Learn',w:620,h:560,flush:true,
+ render:function(b){
+   b.innerHTML='<div class="lvls" id="sbLvls"></div><div class="term"><div class="tout" id="sbOut"></div>'+
+     '<div class="tline"><span id="sbPrompt">operator@jail:~$</span><input id="sbIn" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="command"></div></div>';
+   var lv=$('#sbLvls',b);
+   lv.appendChild(tagBtn('help',function(){sbRun('help')}));
+   var opb=tagBtn((opState().st>=4?'\u2713 ':'')+'OPERATION: BLACKOUT',function(){sbRun('op')});opb.classList.add('op');lv.appendChild(opb);
+   CHALLENGES.forEach(function(c){var done=(ME.done&&ME.done[c.id]);var bn=el('button','tab'+(done?' on':''),(done?'✓ ':'')+c.name);bn.type='button';bn.onclick=function(){sbMission(c)};lv.appendChild(bn)});
+   sbPrint("NEXUS sandbox — a safe simulated shell. nothing here is real.\ntype 'help' or tap a mission above. flags look like grid{...}\n",'s');
+   var inp=$('#sbIn',b);
+   inp.addEventListener('keydown',function(e){
+     if(e.key==='Enter'){var v=inp.value;inp.value='';if(v.trim()){sbState.hist.push(v);sbState.hi=sbState.hist.length}sbRun(v)}
+     else if(e.key==='ArrowUp'){if(sbState.hi>0){sbState.hi--;inp.value=sbState.hist[sbState.hi]||''}}
+     else if(e.key==='ArrowDown'){if(sbState.hi<sbState.hist.length-1){sbState.hi++;inp.value=sbState.hist[sbState.hi]||''}else{sbState.hi=sbState.hist.length;inp.value=''}}
+   });
+   setTimeout(function(){inp.focus()},40);
+ },onFocus:function(w){var i=$('#sbIn',w);if(i)i.focus()}};
+function tagBtn(t,fn){var b=el('button','tab',t);b.type='button';b.onclick=fn;return b}
+function sbPrint(t,cls){var o=$('#sbOut');if(!o)return;var d=el('div',cls||'');d.innerHTML=cls==='flag'?t:esc(t);o.appendChild(d);o.scrollTop=o.scrollHeight}
+function sbPrompt(){var p=$('#sbPrompt');if(p)p.textContent='operator@jail:'+sbState.cwd+'$'}
+function sbMission(c){sbState.active=c;
+  sbPrint('\n── MISSION: '+c.name+' ('+c.xp+' XP) ──','f');
+  sbPrint(c.brief,'s');
+  sbPrint("submit with:  flag <your answer>     (hint: "+c.hint+")\n",'');
+}
+function sbRun(line){
+  sbPrint('operator@jail:'+sbState.cwd+'$ '+line,'c');
+  var parts=line.trim().split(/\s+/),cmd=parts[0],arg=parts.slice(1).join(' ');
+  if(!cmd)return;
+  switch(cmd){
+    case 'help':sbPrint("commands: ls, ls -a, cat <file>, grep [-c] <pat> <file>, rev <file>, hex -d <hex>, strings <file>, wc -l <file>, base64 -d <b64>, xxd <file>, man <cmd>, history, uname -a, date, echo, pwd, whoami, clear, missions, op, submit <answer>, flag <answer>\nthis is a learning jail — real device control lives in the native app + Termux bridge.",'');break;
+    case 'missions':CHALLENGES.forEach(function(c){sbPrint((ME.done&&ME.done[c.id]?'✓ ':'· ')+c.name+'  ('+c.xp+'xp)','')});sbPrint('tap one above, or read its brief, then: flag <answer>','');break;
+    case 'whoami':sbPrint('operator','');break;
+    case 'pwd':sbPrint(sbState.cwd==='~'?'/home/operator':sbState.cwd,'');break;
+    case 'ls':
+      var all=arg.indexOf('-a')>=0;var files=Object.keys(JAIL).filter(function(f){return all||f[0]!=='.'});
+      sbPrint(files.join('  '),'');break;
+    case 'cat':
+      if(JAIL[arg]!=null)sbPrint(JAIL[arg],'');else sbPrint('cat: '+arg+': No such file','e');break;
+    case 'echo':
+      if(/\|\s*base64\s*-d/.test(line)||arg.indexOf('base64')>=0){sbPrint('(tip: pipe a value into `base64 -d`, e.g. echo STRING | base64 -d)','');}
+      else sbPrint(arg.replace(/^["']|["']$/g,''),'');break;
+    case 'base64':
+      if(arg.indexOf('-d')>=0){var s=arg.replace('-d','').trim();try{sbPrint(atob(s),'')}catch(e){sbPrint('base64: invalid input (pass the string: base64 -d <b64>)','e')}}
+      else sbPrint('usage: base64 -d <string>','');break;
+    case 'grep':{
+      var t2=parts.slice(1),cnt=false;
+      t2=t2.filter(function(a){if(a==='-c'){cnt=true;return false}return a!=='-i'});
+      var gp=t2[0],gf=t2[1];
+      if(!gp||!gf){sbPrint('usage: grep [-c] <pattern> <file>','');break}
+      if(JAIL[gf]==null){sbPrint('grep: '+gf+': No such file','e');break}
+      var ml=JAIL[gf].split('\n').filter(function(l){return l.indexOf(gp)>=0});
+      sbPrint(cnt?String(ml.length):(ml.join('\n')||'(no matches)'),'');break;}
+    case 'rev':
+      if(JAIL[arg]!=null)sbPrint(JAIL[arg].split('\n').map(function(l){return l.split('').reverse().join('')}).join('\n'),'');
+      else if(arg)sbPrint(arg.split('').reverse().join(''),'');
+      else sbPrint('usage: rev <file>','');break;
+    case 'hex':
+      if(arg.indexOf('-d')>=0){var hs=arg.replace('-d','').trim().replace(/\s+/g,'');
+        try{var ho='';for(var hi=0;hi<hs.length;hi+=2)ho+=String.fromCharCode(parseInt(hs.substr(hi,2),16));sbPrint(ho,'')}catch(e){sbPrint('hex: bad input','e')}}
+      else sbPrint('usage: hex -d <hexstring>','');break;
+    case 'strings':
+      if(JAIL[arg]==null){sbPrint('strings: '+arg+': No such file','e');break}
+      sbPrint((JAIL[arg].match(/[\x20-\x7e]{4,}/g)||[]).join('\n'),'');break;
+    case 'wc':{
+      var wt=parts.slice(1).filter(function(a){return a[0]!=='-'}),wf=wt[0];
+      if(JAIL[wf]==null){sbPrint('wc: '+wf+': No such file','e');break}
+      sbPrint(JAIL[wf].replace(/\n$/,'').split('\n').length+' '+wf,'');break;}
+    case 'clear':$('#sbOut').innerHTML='';break;
+    case 'flag':
+      submitFlag(arg);break;
+    case 'sudo':sbPrint('operator is not in the sudoers file. This incident will be reported.','e');break;
+    case 'rm':sbPrint("nice try — the jail is read-only. nothing here can be destroyed.",'');break;
+    case 'xxd':{
+      if(JAIL[arg]==null){sbPrint(arg?'xxd: '+arg+': No such file':'usage: xxd <file>','e');break}
+      var xs=JAIL[arg].slice(0,96),xo=[];
+      for(var xi=0;xi<xs.length;xi+=8){var ck=xs.substr(xi,8),hx2='',as='';
+        for(var xj=0;xj<ck.length;xj++){var cc=ck.charCodeAt(xj)&255;hx2+=('0'+cc.toString(16)).slice(-2)+' ';as+=cc>=32&&cc<127?ck[xj]:'.'}
+        xo.push(('0000000'+xi.toString(16)).slice(-8)+':  '+(hx2+'                        ').slice(0,24)+' '+as)}
+      sbPrint(xo.join('\n')+(JAIL[arg].length>96?'\n\u2026 ('+JAIL[arg].length+' bytes total)':''),'');break}
+    case 'uname':sbPrint(arg.indexOf('-a')>=0?'NEXUS jail 6.0.0-secure #1 SMP sandbox (simulated) '+(navigator.platform||'web'):'NEXUS','');break;
+    case 'date':sbPrint(new Date().toString(),'');break;
+    case 'history':sbPrint(sbState.hist.map(function(h,i){return ('   '+(i+1)).slice(-4)+'  '+h}).join('\n')||'(empty)','');break;
+    case 'man':{
+      var MAN={ls:'ls [-a] \u2014 list files. -a includes dotfiles (names starting with a dot).',cat:'cat <file> \u2014 print a file.',grep:'grep [-c] <pattern> <file> \u2014 print lines containing pattern. -c counts them instead.',
+        rev:'rev <file|text> \u2014 reverse each line, character by character.',hex:'hex -d <hexstring> \u2014 decode hex pairs into text.',strings:'strings <file> \u2014 pull printable runs (4+ chars) out of binary data.',
+        base64:'base64 -d <string> \u2014 decode base64 text.',xxd:'xxd <file> \u2014 hexdump: offset, bytes in hex, printable ASCII.',wc:'wc -l <file> \u2014 count lines.',flag:'flag <answer> \u2014 submit a mission flag.',submit:'submit <answer> \u2014 answer the current OPERATION stage.',op:'op \u2014 show the OPERATION briefing and your current stage.'};
+      sbPrint(MAN[arg]||(arg?'no manual entry for '+arg:'usage: man <command>'),MAN[arg]?'':'e');break}
+    case 'op':opShow();break;
+    case 'submit':opSubmit(arg);break;
+    default:sbPrint(cmd+': command not found (type help)','e');
+  }
+  sbPrompt();
+}
+function submitFlag(v){
+  if(!v)return sbPrint('usage: flag <your answer>','');
+  var hit=null;
+  CHALLENGES.forEach(function(c){if(c.check(v))hit=c});
+  if(!hit)return sbPrint('✗ not a valid flag. keep digging.','e');
+  if(ME.done&&ME.done[hit.id])return sbPrint('✓ correct — but you already cleared '+hit.name+'.','s');
+  ME.done=ME.done||{};ME.done[hit.id]=1;saveMe();
+  sbPrint('✓✓ FLAG ACCEPTED — '+hit.name+'  +'+hit.xp+' XP','flag');
+  addXP(hit.xp,'captured a flag');skillUp(hit.skill,hit.xp);bumpQuest('flag');GE('flag');sfx('flag');
+  var cleared=CHALLENGES.filter(function(c){return ME.done[c.id]}).length;
+  if(cleared===CHALLENGES.length&&ME.badges.indexOf('flag-master')<0){ME.badges.push('flag-master');saveMe();paintProfileBits();setTimeout(function(){toast('BADGE EARNED · flag-master')},1000)}
+  if(openApps.sandbox){var lv=$('#sbLvls',openApps.sandbox);if(lv){var bns=$$('.tab',lv);CHALLENGES.forEach(function(c,i){if(ME.done[c.id]&&bns[i+1]){bns[i+1].classList.add('on');if(bns[i+1].textContent[0]!=='✓')bns[i+1].textContent='✓ '+c.name}})}}
+}
+
+/* ---------- OPERATION BLACKOUT: a 4-stage story op in the jail ---------- */
+var OP_BK=[
+ {t:'STAGE 1 \u00b7 RECON',xp:15,q:'the beacon\u2019s destination IP',
+  brief:'A rogue process on YOUR lab VM is phoning home. relay.log caught it.\n  try:  cat relay.log   or   grep beacon relay.log',
+  a:function(v){return v==='10.66.0.13'},
+  beat:'Target acquired. 10.66.0.13 is a quarantined node on your own segment \u2014 someone staged it there.'},
+ {t:'STAGE 2 \u00b7 DECODE',xp:15,q:'the channel KEY',
+  brief:'The beacon ships an encoded payload \u2014 payload.b64. Decode it and pull the channel KEY.\n  try:  cat payload.b64   then   base64 -d <that string>',
+  a:function(v){return v.toUpperCase()==='NEON-DUSK'},
+  beat:'Key NEON-DUSK opens the exfil channel. Now you need credentials to reach the node.'},
+ {t:'STAGE 3 \u00b7 PIVOT',xp:20,q:'the service PASSWORD',
+  brief:'A hidden file in this jail holds service creds, stored reversed.\n  try:  ls -a   then   rev <that file>',
+  a:function(v){return v==='gr1d_m00n'},
+  beat:'svc_backup : gr1d_m00n \u2014 you\u2019re on the node. One killswitch left.'},
+ {t:'STAGE 4 \u00b7 CONTAIN',xp:30,q:'the full flag',
+  brief:'netmap.cfg lists a killswitch as hex. Decode it for the final flag.\n  try:  cat netmap.cfg   then   hex -d <that string>',
+  a:function(v){return v==='grid{blackout_contained}'},
+  beat:'KILLSWITCH THROWN. The beacon dies mid-burst. Your lab is clean.'}
+];
+function opState(){return LS.j('grid:op:blackout',{st:0})}
+function opShow(){
+  var s=opState();
+  sbPrint('\n\u2550\u2550 OPERATION BLACKOUT \u2550\u2550','f');
+  sbPrint('Scenario: your OWN lab VM has a rogue beacon. Trace it, decode it, pivot, contain it.\nAll four stages live inside this simulated jail \u2014 nothing real is touched.','s');
+  if(s.st>=OP_BK.length){sbPrint('STATUS: COMPLETE \u2713 \u2014 all 4 stages contained. Respect.','s');return}
+  var st=OP_BK[s.st];
+  sbPrint('['+s.st+'/4 cleared]  '+st.t+'  (+'+st.xp+' XP)','f');
+  sbPrint(st.brief,'');
+  sbPrint('when you have '+st.q+':   submit <answer>\n','');
+}
+function opSubmit(v){
+  v=(v||'').trim().replace(/^["']|["']$/g,'');
+  if(!v)return sbPrint('usage: submit <answer>','');
+  var s=opState();
+  if(s.st>=OP_BK.length)return sbPrint('operation already complete \u2014 try `missions` for more flags.','s');
+  var st=OP_BK[s.st];
+  if(!st.a(v)){sfx('bad');return sbPrint('\u2717 not it \u2014 I need '+st.q+'. re-read the stage with `op`.','e')}
+  s.st++;LS.sj('grid:op:blackout',s);
+  sbPrint('\u2713 '+st.t+' CLEARED   +'+st.xp+' XP','flag');
+  sbPrint(st.beat,'s');
+  addXP(st.xp,'operation blackout');skillUp('network',Math.round(st.xp/2));GE('flag');
+  if(s.st>=OP_BK.length){
+    sfx('flag');bumpQuest('flag');
+    if(ME.badges.indexOf('blackout')<0){ME.badges.push('blackout');saveMe();paintProfileBits()}
+    sbPrint('\n\u2550\u2550 OPERATION COMPLETE \u2014 badge earned: blackout \u2550\u2550','flag');
+    if(openApps.sandbox){var lv=$('.op',openApps.sandbox);if(lv)lv.textContent='\u2713 OPERATION: BLACKOUT'}
+  }else{sfx('ok');var nx=OP_BK[s.st];sbPrint('\nNEXT \u2192 '+nx.t,'f');sbPrint(nx.brief,'')}
+}
+</script>

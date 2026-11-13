@@ -1,0 +1,164 @@
+<script>
+/* ================= NEXUS // GRID — hacker social OS ================= */
+(function(){
+'use strict';
+var $=function(s,r){return (r||document).querySelector(s)},
+    $$=function(s,r){return [].slice.call((r||document).querySelectorAll(s))},
+    el=function(t,c,h){var e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e},
+    esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(m){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]})},
+    pad=function(n){return String(n).padStart(2,'0')},
+    now=function(){return Date.now()};
+function safeColor(c){return /^#[0-9a-fA-F]{3,8}$/.test(c||'')?c:'#00ff7b'}
+
+/* ---- storage (localStorage, RAM fallback) ---- */
+var RAM={};
+var LS={get:function(k){try{var v=localStorage.getItem(k);return v==null?(k in RAM?RAM[k]:null):v}catch(e){return k in RAM?RAM[k]:null}},
+  set:function(k,v){RAM[k]=v;try{localStorage.setItem(k,v)}catch(e){}},
+  j:function(k,d){var v=LS.get(k);if(!v)return d;try{return JSON.parse(v)}catch(e){return d}},
+  sj:function(k,o){LS.set(k,JSON.stringify(o))}};
+
+/* ---- capabilities (null until/unless granted) ---- */
+var CAP={db:null,user:null,room:null,sample:null,me:null,ready:false};
+function initCaps(){
+  if(!(window.claude&&window.claude.use)){CAP.ready=true;return}
+  var want=['db','user','room','sample'],done=0;
+  want.forEach(function(n){
+    try{window.claude.use(n).then(function(ns){CAP[n]=ns;step()},step)}catch(e){step()}
+  });
+  function step(){if(++done<want.length)return;
+    if(CAP.user){try{CAP.user.me().then(function(m){CAP.me=m;CAP.ready=true;onCaps()},function(){CAP.ready=true;onCaps()})}catch(e){CAP.ready=true;onCaps()}}
+    else{CAP.ready=true;onCaps()}}
+  setTimeout(function(){if(!CAP.ready){CAP.ready=true;onCaps()}},10500);
+}
+function onCaps(){
+  if(CAP.db){document.body.classList.add('live');$('#tMode').textContent='GRID';toast('connected to the GRID — shared feed live')}
+  if(CAP.me&&CAP.me.id){ // adopt real identity
+    ME.serverId=CAP.me.id;
+    if(CAP.me.name&&(!ME.handle||ME.handle==='operator'))ME.handle=CAP.me.name.replace(/\s+/g,'_');
+    saveMe();paintProfileBits();
+  }
+  if(feedLive)feedLive();
+  if(typeof lbPush==='function')lbPush(true);
+}
+
+/* ---- profile / XP ---- */
+var RANKS=[['NEWB',0],['SCRIPT_KIDDIE',100],['OPERATOR',350],['BREAKER',800],['GHOST',1600],['ARCHITECT',3200],['ROOT',6400]];
+var ME=Object.assign({handle:'operator',bio:'',xp:0,streak:0,lastDay:'',skills:{web:0,network:0,mobile:0,reversing:0,hardware:0,crypto:0},badges:[],done:{},color:'#00ff7b',serverId:null},LS.j('grid:me',null)||{});
+ME.color=safeColor(ME.color);
+function saveMe(){LS.sj('grid:me',ME)}
+function rankOf(xp){var r=RANKS[0];for(var i=0;i<RANKS.length;i++)if(xp>=RANKS[i][1])r=RANKS[i];return r}
+function nextRank(xp){for(var i=0;i<RANKS.length;i++)if(xp<RANKS[i][1])return RANKS[i];return null}
+function addXP(n,why){
+  ME.xp+=n;var r=rankOf(ME.xp);
+  if(why||n>=5)toast('+'+n+' XP'+(why?' · '+why:''));   // tiny silent awards (likes, replies) don't spam
+  paintProfileBits();saveMe();if(typeof lbPush==='function')lbPush();
+  if(ME.xp-n<r[1]&&ME.xp>=r[1]&&n>0){setTimeout(function(){if(typeof rankUp==='function')rankUp(r);else toast('RANK UP → '+r[0])},700)}
+}
+function paintProfileBits(){
+  var r=rankOf(ME.xp),nx=nextRank(ME.xp),base=r[1],top=nx?nx[1]:r[1],
+      pct=nx?Math.round((ME.xp-base)/(top-base)*100):100;
+  $('#tRank').textContent=r[0].split('_')[0];$('#tXpN').textContent=ME.xp+'xp';
+  $('#hRank').textContent='RANK // '+r[0].replace('_',' ');
+  $('#hXp').textContent=ME.xp+' / '+(nx?top:'MAX')+' XP';
+  $('#hXpBar').style.width=pct+'%';
+  if(openApps.profile)paintProfile();
+}
+
+/* ---- toast / modal ---- */
+var _tt;function toast(m){var t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(_tt);_tt=setTimeout(function(){t.classList.remove('on')},2000)}
+function modal(html){var m=$('#modal');$('#mbox').innerHTML=html;m.hidden=false;return m}
+function closeModal(){$('#modal').hidden=true}
+$('#modal').addEventListener('click',function(e){if(e.target===this)closeModal()});
+
+/* ---- clock / boot / rain ---- */
+var DAYS=['SUN','MON','TUE','WED','THU','FRI','SAT'],MON=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'],T0=now();
+function tick(){var d=new Date();
+  $('#clock').textContent=pad(d.getHours())+':'+pad(d.getMinutes());
+  $('#hClock').textContent=pad(d.getHours())+':'+pad(d.getMinutes());
+  $('#hDate').textContent=DAYS[d.getDay()]+' // '+MON[d.getMonth()]+' '+pad(d.getDate())+' '+d.getFullYear();
+  var ep=Math.floor(d.getTime()/1000),hs=$('#hSys');
+  if(hs)hs.textContent='EPOCH '+ep+'  ·  0x'+ep.toString(16).toUpperCase()+'  ·  '+[d.getHours(),d.getMinutes(),d.getSeconds()].map(function(v){return ('00000'+v.toString(2)).slice(-6)}).join(':');
+  var up=Math.floor((now()-T0)/1000);$('#up').textContent='UP '+pad(up/3600|0)+':'+pad(up/60%60|0)+':'+pad(up%60);
+  $('#hHi').textContent=(d.getHours()<5?'burning the midnight oil':d.getHours()<12?'good morning':d.getHours()<18?'good afternoon':'good evening')+', @'+ME.handle;
+}
+/* customizable matrix rain — speed/density/glyphs/color/opacity all live-tunable */
+var RAIN_GLYPHS={
+  katakana:'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾅﾆﾇﾈﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ'.split(''),
+  binary:'01'.split(''),
+  code:'01<>{}[]()#$*+=/\\|;:.!?'.split(''),
+  hex:'0123456789ABCDEF'.split(''),
+  runes:'ᚠᚢᚦᚨᚱᚲᚷᚹᚻᚾᛁᛃᛇᛈᛉᛊᛏᛒᛖᛗᛚᛜᛞᛟ'.split('')
+};
+var RAIN=Object.assign({on:true,speed:30,density:68,glyph:'katakana',color:'#00b85a',opacity:16},LS.j('grid:rain',{}));
+function saveRain(){LS.sj('grid:rain',RAIN)}
+function applyRain(){var c=$('#rain');if(c)c.style.opacity=RAIN.on?(RAIN.opacity/100):0;saveRain()}
+var _rainCanvas,_rainCtx,_rainW,_rainH,_rainCols,_rainDr,_rainFs=14,_rainLast=0;
+function rainResize(){if(!_rainCanvas)return;_rainW=_rainCanvas.width=innerWidth;_rainH=_rainCanvas.height=innerHeight;
+  _rainCols=Math.ceil(_rainW/_rainFs);_rainDr=[];for(var i=0;i<_rainCols;i++)_rainDr[i]=Math.random()*-60}
+function rain(){
+  _rainCanvas=$('#rain');_rainCtx=_rainCanvas.getContext('2d');rainResize();applyRain();
+  addEventListener('resize',rainResize);
+  function frame(ts){
+    requestAnimationFrame(frame);
+    if(!RAIN.on){return}
+    if(ts-_rainLast<33)return; _rainLast=ts;              // ~30fps cadence = calmer fall
+    var x=_rainCtx,ch=RAIN_GLYPHS[RAIN.glyph]||RAIN_GLYPHS.katakana,
+        step=0.05+RAIN.speed/100*0.95,                     // speed 0..100 -> 0.05..1.0 rows/tick
+        dens=RAIN.density/100;
+    x.fillStyle='rgba(2,8,4,.08)';x.fillRect(0,0,_rainW,_rainH);x.font=_rainFs+'px monospace';
+    for(var i=0;i<_rainCols;i++){
+      if(((i*2654435761)>>>0)%1000 >= dens*1000)continue;  // stable per-column thinning = density
+      var y=_rainDr[i]*_rainFs;
+      x.fillStyle='#cfffe0';x.fillText(ch[Math.random()*ch.length|0],i*_rainFs,y);
+      x.fillStyle=RAIN.color;x.fillText(ch[Math.random()*ch.length|0],i*_rainFs,y-_rainFs);
+      if(y>_rainH&&Math.random()>.975)_rainDr[i]=Math.random()*-20;
+      _rainDr[i]+=step;
+    }
+  }
+  requestAnimationFrame(frame);
+}
+function bootFacts(){
+  var n=navigator,cn=n.connection,ok=true;try{localStorage.setItem('grid:_probe','1');localStorage.removeItem('grid:_probe')}catch(e){ok=false}
+  var f=['NEXUS // GRID 7.0 \u00b7 '+(n.platform||'web')];
+  if(n.hardwareConcurrency)f.push('cpu      '+n.hardwareConcurrency+' logical cores');
+  if(n.deviceMemory)f.push('memory   ~'+n.deviceMemory+' GB reported by device');
+  f.push('display  '+screen.width+'x'+screen.height+' @'+(window.devicePixelRatio||1)+'x');
+  f.push('storage  '+(ok?'localStorage writable':'blocked \u2014 running from RAM, nothing will persist'));
+  f.push('network  '+(n.onLine?'online'+(cn&&cn.effectiveType?' ('+cn.effectiveType+')':''):'offline'));
+  f.push('apps     '+APP_ORDER.length+' registered');
+  f.push('profile  @'+ME.handle+' \u00b7 '+ME.xp+' XP \u00b7 '+rankOf(ME.xp)[0]);
+  f.push('session opened '+new Date().toLocaleTimeString());
+  return f;
+}
+function boot(){var BOOT=bootFacts(),i=0,log=$('#bootlog'),bar=$('#bootbar'),b=$('#boot');
+  function step(){if(i<BOOT.length){log.textContent+='['+(performance.now()/1000).toFixed(6).padStart(11,' ')+'] '+BOOT[i]+'\n';bar.style.width=Math.round(++i/BOOT.length*100)+'%';setTimeout(step,170)}else setTimeout(end,350)}
+  var ended=false;function end(){if(ended)return;ended=true;b.style.transition='opacity .5s';b.style.opacity=0;setTimeout(function(){b.hidden=true;if(typeof deskReveal==='function')deskReveal();if(typeof afterBoot==='function')afterBoot()},520)}
+  b.addEventListener('click',end);step();
+}
+
+/* ---- network/system monitor (honest, browser-real) ---- */
+function sysmon(){
+  var box=$('#sysmon');if(!box)return;
+  var on=navigator.onLine,cn=navigator.connection,
+      net=on?(cn&&cn.effectiveType?cn.effectiveType.toUpperCase():'ONLINE'):'OFFLINE',
+      dm=navigator.deviceMemory,cores=navigator.hardwareConcurrency,
+      heap=performance.memory?Math.round(performance.memory.usedJSHeapSize/1048576):null,
+      heapPct=performance.memory?Math.round(performance.memory.usedJSHeapSize/performance.memory.jsHeapSizeLimit*100):30;
+  $('#tNet').textContent=net;
+  function g(l,v,p,am){return '<div class="gauge"><div class="l"><span>'+l+'</span><b>'+v+'</b></div><div class="track"><div class="fill'+(am?' amber':'')+'" style="width:'+p+'%"></div></div></div>'}
+  var h='';
+  h+=g('NETWORK',net,on?100:0,!on);
+  if(heap!=null)h+=g('JS HEAP',heap+' MB',heapPct,heapPct>75);
+  if(dm)h+=g('DEVICE RAM',dm+' GB',Math.min(100,dm/8*100));
+  if(cores)h+=g('CPU CORES',cores,Math.min(100,cores/8*100));
+  navBattery(h,box);
+}
+function navBattery(h,box){
+  if(navigator.getBattery){navigator.getBattery().then(function(b){
+    var p=Math.round(b.level*100);
+    h+='<div class="gauge"><div class="l"><span>BATTERY'+(b.charging?' · CHARGING':'')+'</span><b>'+p+'%</b></div><div class="track"><div class="fill'+(p<=20&&!b.charging?' amber':'')+'" style="width:'+p+'%"></div></div></div>';
+    box.innerHTML=h+'<div class="mu" style="font-size:9px;margin-top:4px">real readings from this browser. start the Termux bridge and open System for processes, storage &amp; network.</div>';
+  },function(){box.innerHTML=h})}
+  else box.innerHTML=h+'<div class="mu" style="font-size:9px;margin-top:4px">real readings the browser allows.</div>';
+}
+</script>

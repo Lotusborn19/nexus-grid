@@ -1,0 +1,61 @@
+<script>
+/* ================= FOCUS: a phone workstation you learn on. community comes last ================= */
+function focusOrder(){   // runs at start(), once every app is registered
+  var groups=[
+    ['Learn',['academy','sandbox','algo','blueprint','news']],
+    ['Device',['shell','control','system','automate','bridge']],
+    ['Play',['games']],
+    ['You',['ai','profile','notes','codex','guard','settings']],
+    ['Community',['feed','flash','crews','suggest','friends','market']]
+  ],order=[];
+  groups.forEach(function(g){g[1].forEach(function(id){if(APPS[id]){APPS[id].cat=g[0];order.push(id)}})});
+  APP_ORDER.forEach(function(id){if(order.indexOf(id)<0)order.push(id)});   // never drop an app by accident
+  APP_ORDER.length=0;order.forEach(function(id){APP_ORDER.push(id)});
+}
+
+/* ================= START HERE — four real milestones, each checked against real state ================= */
+function isInstalled(){return !!window.NexusNative||(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true}
+function startSteps(){
+  var s=meStats();
+  return [
+    {t:'Finish your first Academy lesson',d:'short lessons, real commands',done:s.lessons>0,go:function(){openApp('academy')}},
+    {t:'Capture a flag in the Sandbox',d:'practice shell — type `missions`',done:s.flags>0,go:function(){openApp('sandbox')}},
+    {t:'Connect the Termux bridge',d:'real shell + device control on your phone',done:LS.get('grid:bridgeOk')==='1',go:function(){openApp('bridge')}},
+    {t:'Install it as an app',d:'home-screen icon, works offline',done:isInstalled(),go:function(){openApp('settings')}}
+  ];
+}
+function paintStart(){
+  var box=$('#startcard');if(!box)return;
+  var st=startSteps(),n=st.filter(function(x){return x.done}).length;
+  if(n===st.length||LS.get('grid:startHide')==='1'){box.hidden=true;return}
+  box.hidden=false;
+  box.innerHTML='<h4><span>START HERE</span><span>'+n+' / '+st.length+' <button type="button" id="stHide" class="sthide" aria-label="Hide start steps">hide</button></span></h4><div class="startgrid"></div>';
+  var g=$('.startgrid',box);
+  st.forEach(function(x,i){
+    var b=el('button','ststep'+(x.done?' done':''));b.type='button';
+    b.innerHTML='<span class="stn">'+(x.done?'✓':pad(i+1))+'</span><span class="stt"><b>'+esc(x.t)+'</b><i>'+md(x.d)+'</i></span>';
+    b.onclick=x.go;g.appendChild(b)});
+  $('#stHide',box).onclick=function(e){e.stopPropagation();LS.set('grid:startHide','1');paintStart()};
+}
+
+/* ================= INSTALL (PWA) — only real states are shown ================= */
+var PWA={evt:null};
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();PWA.evt=e;paintInstall()});
+window.addEventListener('appinstalled',function(){PWA.evt=null;toast('installed — NEXUS is on your home screen');paintInstall();paintStart()});
+function hosted(){return /^https?:$/.test(location.protocol)}
+function paintInstall(){
+  var box=$('#cfInstall');if(!box)return;
+  var h='<h4><span>INSTALL</span><span class="mu">'+(window.NexusNative?'android app':isInstalled()?'installed':hosted()?'web app':'local file')+'</span></h4>';
+  if(window.NexusNative)h+='<div class="mu" style="font-size:11px">Running inside the NEXUS Android app.</div>';
+  else if(isInstalled())h+='<div class="mu" style="font-size:11px">Installed and running as an app. It keeps working offline.</div>';
+  else if(PWA.evt)h+='<button class="btn pri" id="cfInstGo" type="button" style="width:100%">INSTALL NEXUS</button><div class="mu" style="font-size:10px;margin-top:6px">adds a home-screen icon and makes it work offline</div>';
+  else if(hosted())h+='<div class="mu" style="font-size:11px;line-height:1.7">In Chrome open the <b>⋮</b> menu → <b>Add to Home screen</b> (or <b>Install app</b>). On iPhone: Share → Add to Home Screen.</div>';
+  else h+='<div class="mu" style="font-size:11px;line-height:1.7">You opened this as a local file, which browsers cannot install. Open the hosted link (GitHub Pages) and the install button appears here.</div>';
+  box.innerHTML=h;
+  var go=$('#cfInstGo',box);if(go)go.onclick=function(){var e=PWA.evt;if(!e)return;e.prompt();e.userChoice.then(function(){PWA.evt=null;paintInstall()})};
+}
+// offline support: only where a service worker can really run (hosted over http/https, file present)
+if('serviceWorker' in navigator&&hosted()&&document.querySelector('link[rel="manifest"]')){
+  window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})});
+}
+</script>

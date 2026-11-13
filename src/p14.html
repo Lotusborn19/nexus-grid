@@ -1,0 +1,187 @@
+<script>
+/* ================= DECRYPT TEXT EFFECT ================= */
+var REDUCED=!!(window.matchMedia&&matchMedia('(prefers-reduced-motion:reduce)').matches);
+function scramble(node,text){
+  if(!node)return;
+  if(REDUCED){node.textContent=text;return}
+  var ch='01<>/\\[]{}#$%&*+=_',f=0,n=text.length;
+  var id=setInterval(function(){
+    f+=1;var solved=Math.floor(f/1.4),out='';
+    for(var i=0;i<n;i++)out+=i<solved||text[i]===' '?text[i]:ch[Math.random()*ch.length|0];
+    node.textContent=out;
+    if(solved>=n||!node.isConnected){clearInterval(id);node.textContent=text}
+  },26);
+}
+
+/* ================= CRT OVERLAY (scanlines + vignette) ================= */
+var CRT={on:LS.get('grid:crt')!=='0'};
+function applyCrt(){var c=$('#crt');if(c)c.hidden=!CRT.on}
+
+/* ================= ALGO LAB — watch real sorting algorithms run ================= */
+var ALGOS={
+ bubble:{n:'Bubble',best:'O(n)',avg:'O(n²)',worst:'O(n²)',space:'O(1)',stable:true,
+  d:'Walk the list, swap any neighbours that are out of order, repeat. The largest value "bubbles" to the end each pass.',
+  code:'for (i = 0; i < n; i++)\n  for (j = 0; j < n-1-i; j++)\n    if (a[j] > a[j+1]) swap(a, j, j+1)',
+  run:function(a,op){var n=a.length,sw;for(var i=0;i<n;i++){sw=false;for(var j=0;j<n-1-i;j++){op.c(j,j+1);if(a[j]>a[j+1]){op.s(j,j+1);sw=true}}if(!sw)break}}},
+ insertion:{n:'Insertion',best:'O(n)',avg:'O(n²)',worst:'O(n²)',space:'O(1)',stable:true,
+  d:'Grow a sorted region on the left. Take the next value and slide it left until it sits in place — how most people sort cards.',
+  code:'for (i = 1; i < n; i++)\n  for (j = i; j > 0 && a[j-1] > a[j]; j--)\n    swap(a, j, j-1)',
+  run:function(a,op){for(var i=1;i<a.length;i++){for(var j=i;j>0;j--){op.c(j-1,j);if(a[j-1]>a[j])op.s(j-1,j);else break}}}},
+ selection:{n:'Selection',best:'O(n²)',avg:'O(n²)',worst:'O(n²)',space:'O(1)',stable:false,
+  d:'Scan for the smallest remaining value and swap it to the front. Always n² comparisons, but at most n swaps.',
+  code:'for (i = 0; i < n-1; i++) {\n  min = i\n  for (j = i+1; j < n; j++) if (a[j] < a[min]) min = j\n  swap(a, i, min)\n}',
+  run:function(a,op){for(var i=0;i<a.length-1;i++){var m=i;for(var j=i+1;j<a.length;j++){op.c(m,j);if(a[j]<a[m])m=j}if(m!==i)op.s(i,m)}}},
+ quick:{n:'Quick',best:'O(n log n)',avg:'O(n log n)',worst:'O(n²)',space:'O(log n)',stable:false,
+  d:'Pick a pivot, partition everything smaller to its left and larger to its right, then recurse on both halves.',
+  code:'sort(lo, hi):\n  if (lo >= hi) return\n  p = partition(lo, hi)   // pivot lands at p\n  sort(lo, p-1); sort(p+1, hi)',
+  run:function(a,op){(function qs(lo,hi){if(lo>=hi)return;var p=a[hi],i=lo;for(var j=lo;j<hi;j++){op.c(j,hi);if(a[j]<p){if(i!==j)op.s(i,j);i++}}if(i!==hi)op.s(i,hi);qs(lo,i-1);qs(i+1,hi)})(0,a.length-1)}},
+ merge:{n:'Merge',best:'O(n log n)',avg:'O(n log n)',worst:'O(n log n)',space:'O(n)',stable:true,
+  d:'Split in half until single items, then merge sorted halves back together. Guaranteed n log n, pays for it in memory.',
+  code:'sort(lo, hi):\n  mid = (lo + hi) / 2\n  sort(lo, mid); sort(mid+1, hi)\n  merge(lo, mid, hi)     // two-finger merge',
+  run:function(a,op){(function ms(lo,hi){if(lo>=hi)return;var mid=(lo+hi)>>1;ms(lo,mid);ms(mid+1,hi);var t=[],i=lo,j=mid+1;
+    while(i<=mid&&j<=hi){op.c(i,j);t.push(a[i]<=a[j]?a[i++]:a[j++])}while(i<=mid)t.push(a[i++]);while(j<=hi)t.push(a[j++]);
+    for(var k=0;k<t.length;k++)op.w(lo+k,t[k])})(0,a.length-1)}},
+ heap:{n:'Heap',best:'O(n log n)',avg:'O(n log n)',worst:'O(n log n)',space:'O(1)',stable:false,
+  d:'Arrange the array as a max-heap, then repeatedly swap the root (the max) to the end and repair the heap.',
+  code:'buildMaxHeap(a)\nfor (end = n-1; end > 0; end--) {\n  swap(a, 0, end)\n  siftDown(a, 0, end)\n}',
+  run:function(a,op){var n=a.length;function sift(i,sz){for(;;){var l=2*i+1,r=l+1,m=i;if(l<sz){op.c(l,m);if(a[l]>a[m])m=l}if(r<sz){op.c(r,m);if(a[r]>a[m])m=r}if(m===i)return;op.s(i,m);i=m}}
+    for(var i=(n>>1)-1;i>=0;i--)sift(i,n);for(var e=n-1;e>0;e--){op.s(0,e);sift(0,e)}}}
+};
+var algoState={id:'quick',n:32,speed:60};
+/* record every compare / swap / write an algorithm makes, so playback is exact */
+function algoTrace(id,src){
+  var a=src.slice(),ops=[];
+  ALGOS[id].run(a,{c:function(i,j){ops.push([0,i,j])},s:function(i,j){var t=a[i];a[i]=a[j];a[j]=t;ops.push([1,i,j])},w:function(i,v){a[i]=v;ops.push([2,i,v])}});
+  return {ops:ops,sorted:a};
+}
+APPS.algo={name:'Algo Lab',icon:'▮',cat:'Learn',w:600,h:600,
+ render:function(b){
+   var A=ALGOS[algoState.id],data=[],view=[],tr=null,pos=0,cmp=0,wr=0,timer=null,done=false;
+   b.innerHTML='<h3 class="h">ALGO LAB</h3><div class="sub">real sorting algorithms, executed step by step · every bar move is an actual operation</div>'+
+     '<div class="tabs" id="agTabs"></div>'+
+     '<div class="algobox"><div class="algobars" id="agBars"></div>'+
+       '<div class="algostat"><span>compares <b id="agC">0</b></span><span>writes <b id="agW">0</b></span><span>n = <b id="agN">'+algoState.n+'</b></span><span id="agSt" class="am">ready</span></div></div>'+
+     '<div class="row" style="margin:10px 0"><button class="btn pri" id="agRun" type="button">RUN</button><button class="btn ghost" id="agStep" type="button">step</button><button class="btn ghost" id="agShuf" type="button">shuffle</button>'+
+       '<label class="mu" style="font-size:10px;flex:1;min-width:120px">SPEED <input type="range" id="agSp" min="1" max="100" value="'+algoState.speed+'" style="width:100%"></label>'+
+       '<label class="mu" style="font-size:10px;width:90px">SIZE <input type="range" id="agSz" min="8" max="64" value="'+algoState.n+'" style="width:100%"></label></div>'+
+     '<div class="card"><h4><span id="agName"></span><span class="mu" id="agStable"></span></h4><div class="mu" id="agDesc" style="font-size:11.5px;line-height:1.6"></div>'+
+       '<div class="bigo" id="agBig"></div><pre class="codepre" id="agCode" style="margin-top:10px"></pre></div>';
+   var bars=$('#agBars',b);
+   function stop(){if(timer){clearInterval(timer);timer=null}$('#agRun',b).textContent=done?'RUN AGAIN':'RUN'}
+   function info(){A=ALGOS[algoState.id];$('#agName',b).textContent=A.n.toUpperCase()+' SORT';$('#agStable',b).textContent=A.stable?'stable':'not stable';
+     $('#agDesc',b).textContent=A.d;$('#agCode',b).textContent=A.code;
+     $('#agBig',b).innerHTML=[['BEST',A.best],['AVERAGE',A.avg],['WORST',A.worst],['SPACE',A.space]].map(function(x){return '<div><span>'+x[0]+'</span><b>'+x[1]+'</b></div>'}).join('')}
+   function draw(hi,cls){
+     if(bars.children.length!==view.length){bars.innerHTML='';view.forEach(function(){bars.appendChild(el('i',''))})}
+     for(var k=0;k<view.length;k++){var e=bars.children[k];e.style.height=(view[k]/view.length*100)+'%';e.className=done?'ok':(hi&&(k===hi[0]||k===hi[1])?cls:'')}
+   }
+   function reset(shuffle){
+     stop();done=false;pos=0;cmp=0;wr=0;
+     if(shuffle||data.length!==algoState.n){data=[];for(var k=1;k<=algoState.n;k++)data.push(k);for(var m=data.length-1;m>0;m--){var r=Math.random()*(m+1)|0,t=data[m];data[m]=data[r];data[r]=t}}
+     view=data.slice();tr=algoTrace(algoState.id,data);
+     $('#agC',b).textContent=0;$('#agW',b).textContent=0;$('#agN',b).textContent=algoState.n;$('#agSt',b).textContent=tr.ops.length+' ops queued';$('#agSt',b).className='am';
+     $('#agRun',b).textContent='RUN';draw();
+   }
+   function step(){
+     if(!bars.isConnected){stop();return false}
+     if(pos>=tr.ops.length){finish();return false}
+     var o=tr.ops[pos++];
+     if(o[0]===0){cmp++;draw([o[1],o[2]],'cmp')}
+     else if(o[0]===1){var t=view[o[1]];view[o[1]]=view[o[2]];view[o[2]]=t;wr+=2;draw([o[1],o[2]],'swp')}
+     else{view[o[1]]=o[2];wr++;draw([o[1],-1],'swp')}
+     $('#agC',b).textContent=cmp;$('#agW',b).textContent=wr;$('#agSt',b).textContent=pos+' / '+tr.ops.length;
+     // the classic "sound of sorting": pitch follows the value being touched
+     if(SFX.on&&(pos%2===0)){var c=sfxCtx();if(c)sfxTone(c,180+view[o[1]]/view.length*900,180+view[o[1]]/view.length*900,c.currentTime,0.035,'triangle',0.02)}
+     return true;
+   }
+   function finish(){
+     stop();done=true;draw();$('#agRun',b).textContent='RUN AGAIN';
+     $('#agSt',b).textContent='sorted · '+cmp+' compares';$('#agSt',b).className='ok';
+     var seen=LS.j('grid:algo',{});
+     if(!seen[algoState.id]){seen[algoState.id]=1;LS.sj('grid:algo',seen);addXP(5,'studied '+A.n.toLowerCase()+' sort');
+       if(Object.keys(seen).length===Object.keys(ALGOS).length&&ME.badges.indexOf('algorithmist')<0){ME.badges.push('algorithmist');saveMe();setTimeout(function(){toast('BADGE EARNED · algorithmist')},1200)}}
+   }
+   function play(){
+     if(done)reset(true);
+     if(timer){stop();return}
+     $('#agRun',b).textContent='PAUSE';
+     var tickFn=function(){var per=algoState.speed>80?4:algoState.speed>55?2:1;for(var k=0;k<per;k++)if(!step())return};
+     timer=setInterval(tickFn,Math.max(8,170-algoState.speed*1.65));
+   }
+   var tb=$('#agTabs',b);
+   Object.keys(ALGOS).forEach(function(id){var bn=el('button','tab'+(id===algoState.id?' on':''),ALGOS[id].n);bn.type='button';bn.dataset.a=id;
+     bn.onclick=function(){algoState.id=id;$$('.tab',tb).forEach(function(x){x.classList.toggle('on',x===bn)});info();reset(false)};tb.appendChild(bn)});
+   $('#agRun',b).onclick=play;
+   $('#agStep',b).onclick=function(){stop();if(done)reset(true);step()};
+   $('#agShuf',b).onclick=function(){reset(true)};
+   $('#agSp',b).oninput=function(){algoState.speed=+this.value;if(timer){stop();play()}};
+   $('#agSz',b).oninput=function(){algoState.n=+this.value;reset(true)};
+   info();reset(true);
+ }};
+APP_ORDER.splice(APP_ORDER.indexOf('sandbox')+1,0,'algo');
+
+/* ================= ARCADE: BINARY BLITZ ================= */
+function playBlitz(body,b){
+  var T=45,left=T,solved=0,target=0,bits=[0,0,0,0,0,0,0,0],timer=null,over=false;
+  function val(){var v=0;for(var i=0;i<8;i++)v+=bits[i]<<(7-i);return v}
+  function hex(v){return '0x'+('0'+v.toString(16).toUpperCase()).slice(-2)}
+  function pick(){var max=solved<3?15:solved<6?63:255,t;do{t=1+(Math.random()*max|0)}while(t===target);target=t;bits=[0,0,0,0,0,0,0,0]}
+  function paint(){
+    var v=val();
+    $('#bzT',body).textContent=target;$('#bzHex',body).textContent=hex(target);
+    $('#bzV',body).textContent=v+' · '+hex(v);$('#bzV',body).className=v>target?'bad':'ok';
+    $$('#bzBits button',body).forEach(function(x,i){x.classList.toggle('on',!!bits[i]);x.firstChild.textContent=bits[i]});
+    $('#bzS',body).textContent=solved+' solved';
+  }
+  function stop(){if(timer){clearInterval(timer);timer=null}}
+  body.innerHTML='<button class="btn ghost sm" id="bzBack" type="button">◄ arcade</button>'+
+    '<h3 class="h" style="font-size:15px;margin-top:8px">BINARY BLITZ</h3>'+
+    '<div class="sub">Flip bits until they add up to the target. 45 seconds. Targets grow from 4-bit to a full byte.</div>'+
+    '<div class="row" style="justify-content:space-between;margin-bottom:8px"><b class="am" id="bzL">'+T+'s</b><span class="ok" id="bzS">0 solved</span></div>'+
+    '<div class="bztarget"><span class="mu">TARGET</span><b id="bzT">0</b><i id="bzHex">0x00</i></div>'+
+    '<div class="bzbits" id="bzBits"></div>'+
+    '<div class="mu" style="text-align:center;margin-top:10px;font-size:11px">yours: <b id="bzV" class="ok">0 · 0x00</b></div>';
+  var box=$('#bzBits',body);
+  bits.forEach(function(_,i){var bn=el('button','');bn.type='button';bn.innerHTML='<b>0</b><span>'+(1<<(7-i))+'</span>';bn.setAttribute('aria-label','bit worth '+(1<<(7-i)));
+    bn.onclick=function(){if(over)return;bits[i]^=1;paint();
+      if(val()===target){solved++;sfx('lock');box.classList.add('hit');setTimeout(function(){box.classList.remove('hit')},160);pick();paint()}};
+    box.appendChild(bn)});
+  $('#bzBack',body).onclick=function(){stop();gmRender(b)};
+  function end(){
+    stop();over=true;
+    var xp=Math.min(60,solved*4),best=LS.j('grid:best:blitz',0);if(solved>best){LS.sj('grid:best:blitz',solved);best=solved}
+    if(xp>0)addXP(xp,'binary blitz');if(solved>=6){bumpQuest('play');GE('win')}
+    gameEnd(body,b,{title:solved>=6?'BYTE MASTER':'BUFFER UNDERRUN',cls:solved>=6?'ok':'bad',big:solved+' solved',line:'+'+xp+' XP · best '+best+' · 6 counts as a win',again:function(){playBlitz(body,b)}});
+  }
+  pick();paint();
+  timer=setInterval(function(){if(!box.isConnected){stop();return}left--;var l=$('#bzL',body);if(l)l.textContent=left+'s';if(left<=0)end()},1000);
+}
+GAMES.push({id:'blitz',ic:'',t:'Binary Blitz',d:'Flip bits to hit the target number before the clock runs out. Real binary, real fast.',play:playBlitz});
+
+/* ================= CS CONTENT: trivia + a fundamentals course ================= */
+TRIVIA.push(
+ {q:'Binary search on a sorted list of 1,000,000 items needs at most about…',a:['20 comparisons','1,000 comparisons','500,000 comparisons'],c:0},
+ {q:'Which structure is LIFO (last in, first out)?',a:['Queue','Stack','Hash map'],c:1},
+ {q:'What is 0xFF in decimal?',a:['255','256','15'],c:0},
+ {q:'Average lookup time in a hash table is…',a:['O(n)','O(log n)','O(1)'],c:2},
+ {q:'Which sort is guaranteed O(n log n) in the worst case?',a:['Quick sort','Merge sort','Bubble sort'],c:1},
+ {q:'A byte holds how many distinct values?',a:['8','256','1024'],c:1},
+ {q:'TCP differs from UDP because TCP…',a:['Guarantees ordered, reliable delivery','Is always faster','Has no ports'],c:0},
+ {q:'Recursion without a base case causes…',a:['A stack overflow','A memory leak in the GPU','Faster code'],c:0},
+ {q:'DNS translates…',a:['Names to IP addresses','IP addresses to MAC addresses','HTML to pixels'],c:0},
+ {q:'Which is NOT a property of a good hash function for passwords?',a:['Deliberately slow','Salted per user','Easily reversible'],c:2},
+ {q:'Breadth-first search explores a graph using a…',a:['Stack','Queue','Heap'],c:1},
+ {q:'1 AND 0, then OR 1, equals…',a:['0','1','2'],c:1},
+ {q:'What does a compiler produce from source code?',a:['Machine code or bytecode','A database','A network packet'],c:0},
+ {q:'Two’s complement is used to represent…',a:['Floating point','Negative integers','Unicode text'],c:1}
+);
+COURSES.push({id:'cs',ic:'',t:'Computer Science Core',tag:'beginner',by:'GRID',lessons:[
+  {t:'Bits, bytes and hex',b:"Everything a computer stores is **bits** — 0 or 1. Eight bits make a **byte** (256 possible values).\n\nEach bit position is a power of two:\n```\n128 64 32 16  8  4  2  1\n  0  1  0  0  0  0  0  1   = 65 = 'A'\n```\n**Hex** is shorthand: one hex digit = 4 bits, so a byte is two digits. `0xFF` = `11111111` = 255.\n\nPractice it for real in **Arcade → Binary Blitz**."},
+  {t:'Big-O: how code scales',b:"Big-O describes how work grows as input grows — not how fast one run is.\n\n- **O(1)** — same work at any size (array index, hash lookup)\n- **O(log n)** — halve the problem each step (binary search)\n- **O(n)** — touch everything once (a loop)\n- **O(n log n)** — good sorting (merge, quick on average)\n- **O(n²)** — nested loops (bubble sort)\n\nAt n = 1,000,000: log n ≈ 20, n² = a trillion. That gap is why algorithm choice beats hardware.\n\nWatch it happen in **Algo Lab** — compare the *compares* counter for Bubble vs Quick."},
+  {t:'Data structures that matter',b:"Pick the structure by the question you ask most:\n\n- **Array** — fast by index, slow to insert in the middle\n- **Stack** (LIFO) — undo history, function calls\n- **Queue** (FIFO) — job lists, breadth-first search\n- **Hash map** — key → value in O(1) average; the workhorse\n- **Tree** — sorted data, file systems, the DOM\n- **Graph** — networks, maps, dependencies\n\n```\nstack = []\nstack.append(1); stack.append(2)\nstack.pop()   # 2 — last in, first out\n```"},
+  {t:'How a program actually runs',b:"Source code → **compiler/interpreter** → instructions the CPU executes.\n\nMemory has two main regions:\n- **Stack** — function calls and local variables; automatic, fast, limited\n- **Heap** — data that outlives a function; you (or a garbage collector) manage it\n\nInfinite recursion fills the stack → *stack overflow*. Writing past a buffer on the stack is the classic memory-corruption bug — the reason bounds checks and memory-safe languages exist."},
+  {t:'Networks in five layers',b:"Data crosses a network wrapped in layers, each with one job:\n\n1. **Physical** — radio, copper, fibre\n2. **Link** — one hop: Ethernet / Wi-Fi, MAC addresses\n3. **Internet** — IP addresses, routing between networks\n4. **Transport** — **TCP** (reliable, ordered) or **UDP** (fast, no guarantees), ports\n5. **Application** — HTTP, DNS, SSH\n\nLoading a page: DNS turns the name into an IP → TCP handshake → TLS → HTTP request. Every security tool you will use lives at one of these layers."}],
+  quiz:[{q:'What is 0x10 in decimal?',a:['10','16','2'],c:1},{q:'Which grows slowest as n gets huge?',a:['O(n²)','O(n)','O(log n)'],c:2},{q:'Function calls live on the…',a:['Heap','Stack','Disk'],c:1}]});
+/* section labels decrypt in once the boot screen lifts */
+function deskReveal(){$$('.ilabel span').forEach(function(sp,i){var t=sp.textContent;setTimeout(function(){scramble(sp,t)},i*110)})}
+</script>

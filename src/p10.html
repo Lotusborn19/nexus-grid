@@ -1,0 +1,201 @@
+<script>
+/* ================= DEVICE SUITE — real phone control via the NEXUS Bridge ================= */
+var BRIDGE=Object.assign({host:'127.0.0.1',port:8787,token:'',on:false},LS.j('grid:bridge',{}));
+function saveBridge(){LS.sj('grid:bridge',{host:BRIDGE.host,port:BRIDGE.port,token:BRIDGE.token})}
+function bURL(p){return 'http://'+BRIDGE.host+':'+BRIDGE.port+p}
+async function bridgeCall(path,opts){opts=opts||{};
+  var ctl=new AbortController(),t=setTimeout(function(){ctl.abort()},opts.timeout||5000);
+  try{
+    var r=await fetch(bURL(path),{method:opts.method||'GET',signal:ctl.signal,cache:'no-store',
+      headers:{'X-Nexus-Token':BRIDGE.token||'','Content-Type':'application/json'},
+      body:opts.body?JSON.stringify(opts.body):undefined});
+    clearTimeout(t);
+    var ct=r.headers.get('content-type')||'',d=ct.indexOf('json')>=0?await r.json():await r.text();
+    if(r.status===401)throw new Error('bad token — set it in Bridge');
+    if(!r.ok)throw new Error((d&&d.err)||('HTTP '+r.status));
+    return d;
+  }catch(e){clearTimeout(t);throw e}
+}
+async function bridgePing(silent){
+  try{await bridgeCall('/ping',{timeout:2800});BRIDGE.on=true;if(LS.get('grid:bridgeOk')!=='1'){LS.set('grid:bridgeOk','1');if(typeof paintStart==='function')paintStart()}}catch(e){BRIDGE.on=false}
+  document.querySelectorAll('.bdot').forEach(function(d){d.className='bdot '+(BRIDGE.on?'on':'off')});
+  document.querySelectorAll('.bstate').forEach(function(s){s.textContent=BRIDGE.on?'CONNECTED':'OFFLINE';s.className='bstate '+(BRIDGE.on?'ok':'mu')});
+  if(!silent&&!BRIDGE.on)toast('bridge offline');
+  refreshBanners();
+  return BRIDGE.on;
+}
+function deviceBannerWrap(){return '<div data-dbanner>'+deviceBanner()+'</div>'}
+function refreshBanners(){document.querySelectorAll('[data-dbanner]').forEach(function(d){d.innerHTML=deviceBanner()})}
+function deviceBanner(){
+  return BRIDGE.on
+    ? '<div class="dbanner on"><span class="bdot on"></span>bridge connected — actions run live on your device</div>'
+    : '<div class="dbanner"><span class="bdot off"></span>bridge offline — <button class="lnk" type="button" data-open="bridge">connect it</button> to run live. actions below copy as ready-to-run commands.</div>';
+}
+function copyCmd(txt){
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(function(){toast('copied')},function(){toast('copy failed')})}
+  else toast('copy unavailable')
+}
+
+/* ---------- BRIDGE (connect + setup) ---------- */
+APPS.bridge={name:'Bridge',icon:'🔌',cat:'Device',w:520,h:600,
+ render:function(b){
+   b.innerHTML='<h3 class="h">NEXUS BRIDGE</h3><div class="sub">the companion that gives NEXUS real control of your phone · runs in Termux, loopback-only, token-protected</div>'+
+     '<div class="card"><h4><span>CONNECTION</span><span class="bstate mu">—</span></h4>'+
+       '<div class="row"><label class="mu" style="font-size:10px;flex:1">HOST <input class="in" id="bgHost" value="'+esc(BRIDGE.host)+'"></label><label class="mu" style="font-size:10px;width:90px">PORT <input class="in" id="bgPort" value="'+esc(BRIDGE.port)+'"></label></div>'+
+       '<label class="mu" style="font-size:10px">TOKEN <input class="in" id="bgTok" value="'+esc(BRIDGE.token)+'" placeholder="paste the token Termux printed"></label>'+
+       '<div class="row" style="margin-top:9px"><button class="btn pri" id="bgTest" type="button">save &amp; test</button><span class="bdot off"></span></div></div>'+
+     '<div class="card"><h4><span>SET IT UP (TERMUX)</span></h4>'+
+       '<ol class="setup">'+
+       '<li>Install <b>Termux</b> &amp; <b>Termux:API</b> from F-Droid (not Play Store).</li>'+
+       '<li>In Termux run the setup:<pre data-copy>pkg update &amp;&amp; pkg upgrade -y\npkg install python termux-api -y</pre></li>'+
+       '<li>Drop <b>nexus-bridge.py</b> in Termux and start it:<pre data-copy>termux-wake-lock\npython nexus-bridge.py</pre></li>'+
+       '<li>It prints a <b>token</b> — paste it above, hit <b>save &amp; test</b>.</li>'+
+       '</ol><div class="note">Loopback-only (127.0.0.1) + your token means only apps on your phone that have the token can talk to it. Tap any code block to copy.</div></div>';
+   bindCopies(b);
+   $('#bgTest',b).onclick=function(){BRIDGE.host=$('#bgHost',b).value.trim()||'127.0.0.1';BRIDGE.port=$('#bgPort',b).value.trim()||'8787';BRIDGE.token=$('#bgTok',b).value.trim();saveBridge();bridgePing().then(function(on){toast(on?'bridge connected ✓':'could not reach bridge')})};
+   bridgePing(true);
+ }};
+function bindCopies(b){$$('[data-copy]',b).forEach(function(p){p.style.cursor='pointer';p.title='tap to copy';p.onclick=function(){copyCmd(p.textContent)}})}
+
+/* ---------- CONTROL DECK ---------- */
+var CONTROLS=[
+ {k:'torch_on',t:'Torch On',ic:'bolt',cmd:'termux-torch on'},
+ {k:'torch_off',t:'Torch Off',ic:'bolt',cmd:'termux-torch off'},
+ {k:'vibrate',t:'Vibrate',ic:'control',cmd:'termux-vibrate -d 500'},
+ {k:'toast',t:'Toast',ic:'control',cmd:'termux-toast "NEXUS online"'},
+ {k:'battery',t:'Battery',ic:'pulse',cmd:'termux-battery-status'},
+ {k:'wifi',t:'Wi-Fi Info',ic:'web',cmd:'termux-wifi-connectioninfo'},
+ {k:'location',t:'Location',ic:'web',cmd:'termux-location -p network'},
+ {k:'clipboard_get',t:'Read Clip',ic:'notes',cmd:'termux-clipboard-get'},
+ {k:'volume',t:'Volume',ic:'control',cmd:'termux-volume'}
+];
+APPS.control={name:'Control',icon:'🎛️',cat:'Device',w:540,h:600,
+ render:function(b){
+   b.innerHTML='<h3 class="h">CONTROL DECK</h3><div class="sub">drive your phone’s real hardware through Termux:API</div>'+deviceBanner()+
+     '<div class="cmdgrid" id="cdGrid"></div>'+
+     '<div class="card" style="margin-top:12px"><h4><span>SAY / NOTIFY / COPY</span></h4>'+
+       '<div class="row"><input class="in" id="cdText" placeholder="text…" style="flex:1"></div>'+
+       '<div class="row" style="margin-top:8px"><button class="btn sm" data-act="speak" type="button">speak (TTS)</button><button class="btn sm" data-act="notify" type="button">notify</button><button class="btn sm" data-act="clip" type="button">set clipboard</button></div></div>'+
+     '<div class="outbox" id="cdOut" hidden></div>';
+   var g=$('#cdGrid',b);
+   CONTROLS.forEach(function(c){var t=el('button','cmd-tile');t.type='button';t.innerHTML=ic(c.ic)+'<span>'+esc(c.t)+'</span>';
+     t.onclick=function(){runControl(c.k,c.cmd,b)};g.appendChild(t)});
+   $$('[data-act]',b).forEach(function(bn){bn.onclick=function(){
+     var tx=$('#cdText',b).value.trim();if(!tx)return toast('type some text');
+     var act=bn.dataset.act;
+     if(!BRIDGE.on){var cmd=act==='speak'?'termux-tts-speak '+JSON.stringify(tx):act==='notify'?'termux-notification --title NEXUS --content '+JSON.stringify(tx):'termux-clipboard-set '+JSON.stringify(tx);copyCmd(cmd);return cdShow(b,'$ '+cmd+'\n(copied — bridge offline)')}
+     var path=act==='speak'?'/speak':act==='notify'?'/notify':'/clipboard';
+     var body=act==='notify'?{title:'NEXUS',content:tx}:{text:tx};
+     cdShow(b,'running…');bridgeCall(path,{method:'POST',body:body}).then(function(d){cdShow(b,fmtRes(d))},function(e){cdShow(b,'error: '+e.message)});
+   }});
+ },onFocus:function(){bridgePing(true)}};
+function runControl(k,cmd,b){
+  if(!BRIDGE.on){copyCmd(cmd);return cdShow(b,'$ '+cmd+'\n(copied — connect the bridge to run live)')}
+  cdShow(b,'running '+k+'…');
+  bridgeCall('/termux',{method:'POST',body:{action:k}}).then(function(d){cdShow(b,'$ '+cmd+'\n'+fmtRes(d))},function(e){cdShow(b,'error: '+e.message)});
+}
+function fmtRes(d){if(typeof d==='string')return d;if(d&&(d.out!=null||d.err!=null))return (d.out||'')+(d.err?('\n'+d.err):'')||'(ok, no output)';return JSON.stringify(d,null,2)}
+function cdShow(b,txt){var o=$('#cdOut',b);if(!o)return;o.hidden=false;o.textContent=txt;o.scrollTop=o.scrollHeight}
+
+/* ---------- SHELL (real terminal via bridge) ---------- */
+var shellHist=[],shellHi=0;
+APPS.shell={name:'Shell',icon:'▶',cat:'Device',w:600,h:520,flush:true,
+ render:function(b){
+   b.innerHTML='<div class="term"><div class="tout" id="shOut"></div><div class="tline"><span id="shPrompt">nexus@phone:~$</span><input id="shIn" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="command"></div></div>';
+   var inp=$('#shIn',b);
+   inp.addEventListener('keydown',function(e){
+     if(e.key==='Enter'){var v=inp.value;inp.value='';if(v.trim()){shellHist.push(v);shellHi=shellHist.length}shRun(b,v)}
+     else if(e.key==='ArrowUp'){if(shellHi>0){shellHi--;inp.value=shellHist[shellHi]||''}}
+     else if(e.key==='ArrowDown'){if(shellHi<shellHist.length-1){shellHi++;inp.value=shellHist[shellHi]||''}else{shellHi=shellHist.length;inp.value=''}}
+   });
+   setTimeout(function(){inp.focus()},40);
+   bridgePing(true).then(function(){shPrint(b,BRIDGE.on?'bridge connected — REAL shell on your phone (Termux). type a command.':'bridge offline — connect it in Bridge for a real shell. practice safely in Sandbox meanwhile.',BRIDGE.on?'s':'e')});
+ },onFocus:function(w){var i=$('#shIn',w);if(i)i.focus()}};
+function shPrint(b,t,cls){var o=$('#shOut',b);if(!o)return;var d=el('div',cls||'');d.textContent=t;o.appendChild(d);o.scrollTop=o.scrollHeight}
+function shRun(b,cmd){
+  if(!cmd.trim())return;
+  shPrint(b,'nexus@phone:~$ '+cmd,'c');
+  if(!BRIDGE.on){copyCmd(cmd);shPrint(b,'bridge offline — command copied. connect the bridge to run it live.','e');return}
+  bridgeCall('/run',{method:'POST',body:{cmd:cmd},timeout:32000}).then(function(d){
+    if(d.out)shPrint(b,d.out,'');if(d.err)shPrint(b,d.err,'e');if(!d.out&&!d.err)shPrint(b,'(no output)','mu');
+  },function(e){shPrint(b,'error: '+e.message,'e')});
+}
+
+/* ---------- SYSTEM (processes / files / network) ---------- */
+var sysTab='proc',sysPath=null;
+APPS.system={name:'System',icon:'📊',cat:'Device',w:600,h:600,
+ render:function(b){
+   b.innerHTML='<h3 class="h">SYSTEM</h3><div class="sub">real processes, files &amp; network from your device</div>'+deviceBannerWrap()+
+     '<div class="tabs" id="syTabs"></div><div id="syBody"></div>';
+   [['proc','PROCESSES'],['files','FILES'],['net','NETWORK']].forEach(function(t){var bn=el('button','tab'+(t[0]===sysTab?' on':''),t[1]);bn.type='button';bn.onclick=function(){sysTab=t[0];$$('#syTabs .tab',b).forEach(function(x){x.classList.remove('on')});bn.classList.add('on');sysRender(b)};$('#syTabs',b).appendChild(bn)});
+   bridgePing(true).then(function(){sysRender(b)});
+ },onFocus:function(){bridgePing(true)}};
+function sysRender(b){
+  var box=$('#syBody',b);if(!box)return;
+  if(!BRIDGE.on){box.innerHTML='<div class="empty">connect the bridge to read live '+sysTab+' data from your phone</div>';return}
+  box.innerHTML='<div class="mu" style="font-size:11px">loading…</div>';
+  if(sysTab==='proc'){
+    bridgeCall('/procs').then(function(d){
+      var lines=(d.out||'').trim().split('\n'),head=lines.shift()||'';
+      box.innerHTML='<div class="outbox" style="max-height:none">'+esc(head)+'\n'+esc(lines.slice(0,40).join('\n'))+'</div>';
+    },function(e){box.innerHTML='<div class="note">'+esc(e.message)+'</div>'});
+  }else if(sysTab==='net'){
+    bridgeCall('/net').then(function(d){
+      box.innerHTML='<div class="card"><h4><span>INTERFACES</span></h4><div class="outbox" style="max-height:200px">'+esc((d.ip&&d.ip.out)||'')+'</div></div>'+
+        '<div class="card"><h4><span>ROUTES</span></h4><div class="outbox" style="max-height:140px">'+esc((d.route&&d.route.out)||'')+'</div></div>'+
+        '<div class="note">Only your own device &amp; network. Scanning networks you don’t own is illegal.</div>';
+    },function(e){box.innerHTML='<div class="note">'+esc(e.message)+'</div>'});
+  }else{
+    sysFiles(box,sysPath);
+  }
+}
+function sysFiles(box,path){
+  bridgeCall('/ls'+(path?('?path='+encodeURIComponent(path)):'')).then(function(d){
+    sysPath=d.path;
+    var h='<div class="row" style="margin-bottom:8px;gap:6px"><button class="btn sm ghost" id="fUp" type="button">◄ up</button><span class="mu" style="font-size:10px;word-break:break-all">'+esc(d.path)+'</span></div><div id="fList"></div>';
+    box.innerHTML=h;var list=$('#fList',box);
+    d.items.forEach(function(it){var row=el('button','fileitem');row.type='button';
+      row.innerHTML=ic(it.dir?'notes':'notes')+'<span style="flex:1;text-align:left">'+(it.dir?'▸ ':'  ')+esc(it.name)+'</span><span class="mu">'+(it.dir?'dir':it.size+'b')+'</span>';
+      row.onclick=function(){if(it.dir)sysFiles(box,d.path.replace(/\/$/,'')+'/'+it.name);else fileRead(box,d.path.replace(/\/$/,'')+'/'+it.name)};
+      list.appendChild(row)});
+    var up=$('#fUp',box);if(up)up.onclick=function(){var p=d.path.replace(/\/[^\/]+\/?$/,'')||'/';sysFiles(box,p)};
+  },function(e){box.innerHTML='<div class="note">'+esc(e.message)+'</div>'});
+}
+function fileRead(box,path){
+  bridgeCall('/read?path='+encodeURIComponent(path)).then(function(d){
+    modal('<h3 class="h" style="font-size:14px">'+esc(path.split('/').pop())+'</h3><div class="outbox" style="max-height:60vh;white-space:pre-wrap">'+esc(d.text||'(empty)')+'</div><button class="btn pri sm" style="margin-top:8px" type="button" onclick="this.closest(\'#modal\').hidden=true">close</button>');
+  },function(e){toast(e.message)});
+}
+
+/* ---------- AUTOMATION STUDIO ---------- */
+var AUTO_ACT=[
+ {id:'notify',t:'Send a notification',sh:'termux-notification --title "NEXUS" --content "automation ran"'},
+ {id:'battery',t:'Log battery status',sh:'termux-battery-status >> ~/nexus-battery.log'},
+ {id:'vibrate',t:'Vibrate',sh:'termux-vibrate -d 600'},
+ {id:'speak',t:'Speak a reminder',sh:'termux-tts-speak "operator, your automation fired"'},
+ {id:'wifi',t:'Log Wi-Fi info',sh:'termux-wifi-connectioninfo >> ~/nexus-wifi.log'},
+ {id:'sync',t:'Git pull a project',sh:'cd ~/myproject && git pull'}
+];
+APPS.automate={name:'Automation',icon:'⏱️',cat:'Device',w:560,h:620,
+ render:function(b){
+   b.innerHTML='<h3 class="h">AUTOMATION STUDIO</h3><div class="sub">build a macro → runs on a schedule through Termux’s job scheduler. real, persistent, survives reboot.</div>'+deviceBannerWrap()+
+     '<div class="card"><h4><span>1 · NAME</span></h4><input class="in" id="auName" placeholder="e.g. hourly-battery-log" value="hourly-ping"></div>'+
+     '<div class="card"><h4><span>2 · WHEN</span></h4><select class="in" id="auEvery"><option value="900000">every 15 min</option><option value="1800000">every 30 min</option><option value="3600000" selected>every hour</option><option value="10800000">every 3 hours</option><option value="86400000">once a day</option></select><div class="hintline">Android batches jobs; 15 min is the reliable minimum.</div></div>'+
+     '<div class="card"><h4><span>3 · DO</span></h4><div class="col" id="auActs"></div><textarea class="in" id="auCustom" placeholder="…plus any custom shell (optional)" style="margin-top:8px;min-height:54px"></textarea></div>'+
+     '<div class="card"><h4><span>4 · SCRIPT</span><button class="btn sm ghost" id="auGen" type="button">generate</button></h4><pre class="outbox" id="auScript" style="white-space:pre-wrap">choose actions, then generate</pre>'+
+       '<div class="row" style="margin-top:8px"><button class="btn sm" id="auCopy" type="button">copy script</button><button class="btn sm" id="auCopyCmd" type="button">copy scheduler cmd</button><button class="btn pri sm" id="auInstall" type="button">install via bridge</button></div></div>';
+   var acts=$('#auActs',b);AUTO_ACT.forEach(function(a){var row=el('label','checkrow');row.innerHTML='<input type="checkbox" value="'+a.id+'"> '+esc(a.t);acts.appendChild(row)});
+   function build(){
+     var chosen=$$('#auActs input:checked',b).map(function(i){return (AUTO_ACT.filter(function(a){return a.id===i.value})[0]||{}).sh}).filter(Boolean);
+     var custom=$('#auCustom',b).value.trim();if(custom)chosen.push(custom);
+     var name=($('#auName',b).value.trim()||'job').replace(/[^a-zA-Z0-9_-]/g,'');
+     var script='#!/data/data/com.termux/files/usr/bin/bash\n# NEXUS automation: '+name+'\n'+(chosen.join('\n')||'echo "nexus"');
+     return {name:name,script:script,ms:$('#auEvery',b).value};
+   }
+   $('#auGen',b).onclick=function(){var j=build();$('#auScript',b).textContent=j.script};
+   $('#auCopy',b).onclick=function(){copyCmd(build().script)};
+   $('#auCopyCmd',b).onclick=function(){var j=build();copyCmd('mkdir -p ~/.nexus/auto && nano ~/.nexus/auto/'+j.name+'.sh   # paste the script, save\nchmod +x ~/.nexus/auto/'+j.name+'.sh\ntermux-job-scheduler --script ~/.nexus/auto/'+j.name+'.sh --period-ms '+j.ms+' --persisted true')};
+   $('#auInstall',b).onclick=function(){var j=build();if(!BRIDGE.on){toast('connect the bridge first');return openApp('bridge')}
+     bridgeCall('/automation',{method:'POST',body:{name:j.name,script:j.script,period_ms:+j.ms}}).then(function(d){toast('installed → '+(d.saved||'ok'));addXP(15,'built an automation')},function(e){toast('error: '+e.message)})};
+ }};
+</script>

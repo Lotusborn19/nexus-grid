@@ -1,0 +1,218 @@
+<script>
+/* ---------- NEWS ---------- */
+var newsCat='all';
+APPS.news={name:'Wire',icon:'📰',cat:'Learn',w:560,h:600,
+ render:function(b){
+   var cats=[['all','ALL'],['cyber','CYBER'],['web','WEB'],['cs','CS'],['robotics','ROBOTICS'],['gamedev','GAMEDEV'],['hardware','HARDWARE']];
+   b.innerHTML='<h3 class="h">THE WIRE</h3><div class="sub">trusted sources for cyber, computer science, robotics &amp; game dev · each opens the real site</div><div class="tabs" id="nwTabs"></div><div id="nwList"></div>';
+   var tb=$('#nwTabs',b);cats.forEach(function(c){var bn=el('button','tab'+(c[0]===newsCat?' on':''),c[1]);bn.type='button';bn.onclick=function(){newsCat=c[0];$$('#nwTabs .tab',b).forEach(function(x){x.classList.remove('on')});bn.classList.add('on');paintNews(b)};tb.appendChild(bn)});
+   paintNews(b);
+ }};
+function newsBanner(cat){
+  var pal={cyber:'#00ff7b',web:'#19e0ff',cs:'#b48cff',robotics:'#ffb000',gamedev:'#ff4466',hardware:'#7dff2e'},
+      ico={cyber:'guard',web:'web',cs:'computer',robotics:'robot',gamedev:'gamedev',hardware:'electrical'},
+      c=pal[cat]||'#00ff7b',glyph=ICONS[ico[cat]]||ICONS.news,g='';
+  for(var i=0;i<30;i++)g+='<text x="'+(8+Math.random()*300|0)+'" y="'+(12+Math.random()*76|0)+'" fill="'+c+'" opacity="0.13" font-family="monospace" font-size="10">'+(Math.random()<0.5?'0':'1')+'</text>';
+  return '<svg class="nwbanner" viewBox="0 0 320 90" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><rect width="320" height="90" fill="#041109"/><rect width="320" height="90" fill="'+c+'" opacity="0.14"/>'+g+'<g transform="translate(16,22) scale(1.9)" fill="none" stroke="'+c+'" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">'+glyph+'</g><text x="306" y="80" text-anchor="end" fill="'+c+'" opacity="0.6" font-family="monospace" font-size="11">// '+cat.toUpperCase()+'</text></svg>';
+}
+function paintNews(b){
+  var list=$('#nwList',b);var items=NEWS.filter(function(n){return newsCat==='all'||n.cat===newsCat});
+  list.innerHTML='';
+  items.forEach(function(n){
+    var card=el('div','newscard');
+    card.innerHTML=newsBanner(n.cat)+'<div class="nwbody"><div class="mu" style="font-size:10px;letter-spacing:2px">'+esc(n.cat.toUpperCase())+'</div><a href="'+n.u+'" target="_blank" rel="noopener">'+esc(n.s)+' ↗</a><div class="mu" style="font-size:11px">'+esc(n.d)+'</div></div>';
+    list.appendChild(card);
+  });
+  list.appendChild(el('div','note','A directory of real sources — each card opens the publisher. No headlines are invented here.'));
+}
+
+/* ---------- MARKET ---------- */
+APPS.market={name:'Market',icon:'',cat:'Earn',w:620,h:600,
+ render:function(b){
+   var items=LS.j('grid:market',[]);
+   b.innerHTML='<h3 class="h">MATRIX MARKET</h3><div class="sub">real product pages only \u00b7 every listing opens the place it is actually sold</div>'+
+     '<a class="storecard" href="https://payhip.com/PDFoutlet" target="_blank" rel="noopener"><span class="sic">'+ic('market','ic-xl')+'</span><span class="stx"><b>THE PDF OUTLET</b><i>guides, manuals &amp; courses by Lotus \u00b7 payhip.com/PDFoutlet</i></span><span class="btn pri sm">open store \u2197</span></a>'+
+     '<div class="row" style="margin:14px 0 10px;justify-content:space-between"><b style="font:600 10px var(--display);letter-spacing:3px;color:var(--dim)">YOUR LISTINGS \u00b7 '+items.length+'</b><button class="btn pri sm" id="mkSell" type="button">+ list an item</button></div>'+
+     '<div class="localnote">LOCAL MODE \u00b7 your listings are saved on this device only.</div>'+
+     '<div class="grid2" id="mkGrid"></div>';
+   var g=$('#mkGrid',b);
+   if(!items.length)g.outerHTML='<div class="empty">nothing listed yet \u2014 add a product with the link where it is really sold</div>';
+   else items.forEach(function(m,idx){var c=el('div','listing');
+     c.innerHTML='<div class="th">'+ic('box','ic-xl')+'</div><div class="bd"><div class="handle">'+esc(m.t)+'</div><div class="mu" style="font-size:11px;flex:1">'+esc(m.d||'')+'</div><span class="tag">'+esc(m.cat)+'</span><div class="row" style="justify-content:space-between;margin-top:4px"><span class="price">'+esc(m.price||'')+'</span><span class="row" style="gap:6px"><button class="btn sm ghost" type="button" data-rm>remove</button><a class="btn sm" href="'+esc(m.url)+'" target="_blank" rel="noopener">open \u2197</a></span></div></div>';
+     $('[data-rm]',c).onclick=function(){var x=LS.j('grid:market',[]);x.splice(idx,1);LS.sj('grid:market',x);APPS.market.render(b)};
+     g.appendChild(c)});
+   $('#mkSell',b).onclick=function(){modal('<h3 class="h" style="font-size:14px">LIST AN ITEM</h3><div class="sub">it needs the real page where people can get it</div><div class="col" style="margin-top:8px"><input class="in" id="slT" placeholder="title" maxlength="80"><input class="in" id="slU" placeholder="https:// link to the product page"><input class="in" id="slP" placeholder="price shown on that page, e.g. $9.99 or free" maxlength="20"><select class="in" id="slC"><option>course</option><option>guide</option><option>theme</option><option>code</option><option>tool</option></select><textarea class="in" id="slD" placeholder="one or two lines about it" maxlength="240"></textarea><button class="btn pri" id="slGo" type="button">list it</button></div>');
+     $('#slGo').onclick=function(){var t=$('#slT').value.trim(),u=$('#slU').value.trim();if(!t)return toast('needs a title');
+       if(!/^https?:\/\/[^\s"'<>]+$/i.test(u))return toast('needs a full https:// product link');
+       var x=LS.j('grid:market',[]);x.unshift({t:t,url:u,price:$('#slP').value.trim(),cat:$('#slC').value,by:ME.handle,d:$('#slD').value.trim()});LS.sj('grid:market',x);closeModal();addXP(15,'listed an item');APPS.market.render(b)}};
+ }};
+
+/* ---------- AI ASSISTANT ---------- */
+var aiHist=[];
+APPS.ai={name:'ORACLE',icon:'🧠',cat:'You',w:480,h:620,flush:true,
+ render:function(b){
+   b.innerHTML='<div class="orahead"><span class="orabk" id="oraBk">● AUTO</span><span style="flex:1"></span>'+
+     '<button class="btn sm ghost" id="oraMemBtn" type="button">memory</button><button class="btn sm ghost" id="oraCfg" type="button">setup</button></div>'+
+     '<div class="term" style="background:transparent"><div class="tout" id="aiLog" style="display:flex;flex-direction:column;gap:10px"></div>'+
+     '<div class="tline"><input id="aiIn" placeholder="ask ORACLE…  try: remember: I build in Termux" autocomplete="off"><button class="btn pri sm" id="aiSend" type="button">▶</button></div></div>';
+   oraBkLabel();
+   var log=$('#aiLog',b);
+   if(!aiHist.length){var ib=aiBub(log,'ai',oraIntroText());oraProbe(function(){oraBkLabel();if(ib&&ib.isConnected&&!aiHist.length)ib.innerHTML=md(oraIntroText())})}
+   else{aiHist.forEach(function(m){if(m.r==='me'||m.r==='ai')aiBub(log,m.r,m.t)});oraProbe(oraBkLabel)}
+   var send=function(){var v=$('#aiIn',b).value.trim();if(!v)return;$('#aiIn',b).value='';aiBub(log,'me',v);aiHist.push({r:'me',t:v});aiAsk(v,log)};
+   $('#aiSend',b).onclick=send;$('#aiIn',b).addEventListener('keydown',function(e){if(e.key==='Enter')send()});
+   $('#oraMemBtn',b).onclick=oraMemModal;$('#oraCfg',b).onclick=oraCfgModal;
+ }};
+function aiBub(log,who,txt){var d=el('div','bub '+who);d.innerHTML=who==='ai'?md(txt):esc(txt);log.appendChild(d);log.scrollTop=log.scrollHeight;return d}
+function oraBkLabel(){var e=$('#oraBk');if(!e)return;var bk=oraPickBackend(),m={claude:'● CLAUDE',local:'● LOCAL MODEL',auto:'● AUTO',offline:'● OFFLINE'};var has=oraHasModel();e.textContent=has?(m[bk]||'● AUTO'):'○ NO MODEL';e.className='orabk '+(has&&bk!=='offline'?'ok':'am')}
+function oraMemModal(){var m=oraMem();
+  modal('<h3 class="h" style="font-size:14px">WHAT ORACLE REMEMBERS</h3><div class="sub">grows as you talk · makes ORACLE better for you over time (it’s memory/context, not retraining)</div>'+
+    '<div class="row" style="margin-bottom:8px"><input class="in" id="omIn" placeholder="add a fact about you…" style="flex:1"><button class="btn pri sm" id="omAdd" type="button">add</button></div><div class="col" id="omList"></div>');
+  function paint(){var mm=oraMem(),L=$('#omList');L.innerHTML=mm.length?'':'<div class="mu" style="font-size:11px">nothing yet — tell ORACLE things, or add them here</div>';
+    mm.forEach(function(f,i){var r=el('div','lb');r.style.padding='7px 2px';r.innerHTML='<span style="flex:1">'+esc(f)+'</span><button class="btn sm ghost" type="button">✕</button>';$('button',r).onclick=function(){oraMemDel(i);paint()};L.appendChild(r)})}
+  paint();$('#omAdd').onclick=function(){var v=$('#omIn').value.trim();if(v){oraMemAdd(v);$('#omIn').value='';paint()}};
+}
+function oraCfgModal(){
+  modal('<h3 class="h" style="font-size:14px">ORACLE SETUP</h3><div class="col">'+
+    '<label class="mu" style="font-size:10px">BRAIN <select class="in" id="ocBk"><option value="auto">Auto (Claude, else local)</option><option value="claude">Claude (cloud)</option><option value="local">Local model (Ollama)</option><option value="offline">Offline knowledge base</option></select></label>'+
+    '<label class="mu" style="font-size:10px">OLLAMA URL <input class="in" id="ocUrl" value="'+esc(ORA.ollama)+'"></label>'+
+    '<label class="mu" style="font-size:10px">MODEL <input class="in" id="ocModel" value="'+esc(ORA.model)+'"></label>'+
+    '<label class="mu" style="font-size:10px">ROBOT URL (optional) <input class="in" id="ocRobot" value="'+esc(ORA.robot)+'" placeholder="http://192.168.1.50"></label>'+
+    '<div class="row"><button class="btn pri sm" id="ocSave" type="button">save</button><button class="btn ghost sm" type="button" onclick="this.closest(\'#modal\').hidden=true">close</button></div>'+
+    '<div class="note">Local model &amp; robot run on your own network, so they connect when you open NEXUS on your phone (not inside this preview). Build it in Blueprints → Phone → Robot Brain.</div></div>');
+  $('#ocBk').value=ORA.backend;
+  $('#ocSave').onclick=function(){ORA.backend=$('#ocBk').value;ORA.ollama=$('#ocUrl').value.trim()||ORA.ollama;ORA.model=$('#ocModel').value.trim()||ORA.model;ORA.robot=$('#ocRobot').value.trim();saveOra();oraBkLabel();closeModal();toast('ORACLE updated')};
+}
+function aiAsk(q,log){
+  bumpQuest('ask');addXP(1,'');GE('ask');
+  var lc=oraLocalCmd(q.trim());   // instant local commands — work even fully offline
+  if(lc){var d0=aiBub(log,'ai','');
+    d0.innerHTML=md(lc.t)+(lc.did.length?'<div class="row" style="margin-top:7px">'+lc.did.map(function(x){return '<span class="tag a">▸ '+esc(x)+'</span>'}).join('')+'</div>':'');
+    aiHist.push({r:'ai',t:lc.t});return}
+  if(/^remember[:\s]/i.test(q)){oraMemAdd(q.replace(/^remember[:\s]+/i,''));aiBub(log,'ai','got it — I\'ll remember that. ✓');aiHist.push({r:'ai',t:'(remembered)'});return}
+  var d=aiBub(log,'ai','…'),bk=oraPickBackend(),sys=oraSystem(),
+      msgs=aiHist.filter(function(m){return m.r==='me'||m.r==='ai'}).slice(-8).map(function(m){return {role:m.r==='me'?'user':'assistant',content:m.t}});
+  function finish(txt){var acts=[],did=[];
+    txt=String(txt||'').replace(/\[\[do:([a-z0-9_-]+)\]\]/gi,function(_,a){acts.push(a.toLowerCase());return ''});
+    txt=txt.replace(/\[\[(open|theme|rain|draft):([^\]]*)\]\]/gi,function(_,k,v){var r=gridAct(k.toLowerCase(),v);if(r)did.push(r);return ''}).trim();
+    var chips=acts.map(function(a){return '<span class="tag a">▸ robot: '+esc(a)+'</span>'}).concat(did.map(function(x){return '<span class="tag a">▸ '+esc(x)+'</span>'}));
+    d.innerHTML=md(txt)+(chips.length?'<div class="row" style="margin-top:7px">'+chips.join('')+'</div>':'');
+    aiHist.push({r:'ai',t:txt});acts.forEach(robotDo);if(acts.length)toast('sent '+acts.length+' robot action(s)')}
+  function offline(){var t=aiOffline(q);d.innerHTML=md(t);aiHist.push({r:'ai',t:t})}
+  function viaClaude(next){if(!CAP.sample)return next?next():offline();
+    try{CAP.sample(msgs,{system:sys,modelTier:'quick',onText:function(u){d.innerHTML=md(u.text)}}).then(function(r){finish(r.text)},function(){next?next():offline()})}catch(e){next?next():offline()}}
+  function viaLocal(next){ollamaChat(msgs,sys).then(finish,function(){next?next():offline()})}
+  if(bk==='claude')viaClaude(function(){viaLocal(offline)});
+  else if(bk==='local')viaLocal(function(){viaClaude(offline)});
+  else if(bk==='auto')viaClaude(function(){viaLocal(offline)});
+  else offline();
+}
+var STOP={what:1,when:1,where:1,which:1,with:1,from:1,that:1,this:1,have:1,does:1,start:1,should:1,would:1,could:1,about:1,make:1,your:1,into:1,them:1,they:1,want:1,need:1,help:1,best:1,like:1,some:1,more:1,most:1,just:1,been:1,will:1,then:1,than:1,work:1,works:1,using:1,learn:1};
+function aiOffline(q){
+  // no model is connected: do not pretend to answer. search the real content that ships in the GRID instead.
+  var words=q.toLowerCase().split(/[^a-z0-9+#]+/).filter(function(w){return w.length>3&&!STOP[w]}),hits=[];
+  COURSES.forEach(function(c){c.lessons.forEach(function(l){
+    var hay=(c.t+' '+l.t+' '+l.b).toLowerCase(),n=0;words.forEach(function(w){if(hay.indexOf(w)>=0)n++});
+    if(n)hits.push({n:n,s:'Academy \u2192 '+c.t+' \u2192 '+l.t})})});
+  hits.sort(function(a,b){return b.n-a.n});if(hits.length)hits=hits.filter(function(h){return h.n===hits[0].n});   // best matches only
+  var out='**No AI model is connected**, so I can\u2019t answer that myself.';
+  if(hits.length)out+='\n\nLessons in the GRID that mention it:\n'+hits.slice(0,3).map(function(h){return '- '+h.s}).join('\n');
+  out+='\n\nI can still run commands: `open arcade`, `theme ember`, `rain off`, `my stats`. For real answers, connect Claude or a local Ollama model in **setup**.';
+  return out;
+}
+
+/* ---------- NOTES ---------- */
+APPS.notes={name:'Vault',icon:'📝',cat:'You',w:420,h:480,
+ render:function(b){
+   b.innerHTML='<h3 class="h">VAULT</h3><div class="sub">private notes &amp; command snippets · stays in this browser</div><textarea class="in" id="nv" style="min-height:300px" placeholder="paste commands, creds-free notes, ideas…"></textarea><div class="row" style="margin-top:8px"><button class="btn pri sm" id="nvS" type="button">save</button><span class="mu" id="nvSt" style="font-size:11px"></span></div>';
+   $('#nv',b).value=LS.get('grid:vault')||'';
+   var save=function(){LS.set('grid:vault',$('#nv',b).value);$('#nvSt',b).textContent='saved '+new Date().toLocaleTimeString()};
+   $('#nvS',b).onclick=save;var t;$('#nv',b).addEventListener('input',function(){clearTimeout(t);t=setTimeout(save,800)});
+ }};
+
+/* ---------- GUARD (honest security posture) ---------- */
+APPS.guard={name:'Sentinel',icon:'🛡️',cat:'You',w:440,h:560,
+ render:function(b){
+   var secure=location.protocol==='https:',dnt=navigator.doNotTrack==='1';
+   function chk(ok,t,d){return '<div class="card" style="border-color:'+(ok?'var(--edge)':'rgba(255,176,0,.45)')+'"><div class="row" style="justify-content:space-between"><b class="'+(ok?'ok':'am')+'">'+(ok?'✓':'!')+' '+esc(t)+'</b></div><div class="mu" style="font-size:11px;margin-top:4px">'+esc(d)+'</div></div>'}
+   b.innerHTML='<h3 class="h">SENTINEL</h3><div class="sub">what this browser can actually verify about your session</div><div class="col">'+
+     chk(secure,'Secure connection',secure?'This page is served over HTTPS.':'Not HTTPS — serve over https for full features.')+
+     chk(navigator.onLine,'Network',navigator.onLine?'You are online.':'Offline.')+
+     chk(true,'Local-only data','Your profile, notes and progress stay in this browser. Nothing is uploaded unless you post to the GRID.')+
+     chk(dnt,'Do Not Track',dnt?'Enabled in your browser.':'Not set — optional privacy signal.')+
+     '<div class="card"><h4><span>ETHOS</span></h4><div class="mu" style="font-size:11px;line-height:1.7">NEXUS is for defenders and builders. Monitor and harden <b>your own</b> devices and networks. Never target anything you don\'t own or aren\'t authorised to test. #Hack_The_World — the right way.</div></div></div>';
+ }};
+
+/* ---------- SETTINGS ---------- */
+APPS.settings={name:'Config',icon:'⚙️',cat:'You',w:420,h:520,
+ render:function(b){
+   b.innerHTML='<h3 class="h">CONFIG</h3><div class="sub">tune your GRID</div><div class="col">'+
+     '<div class="card"><h4><span>THEME</span><span class="mu">recolors everything</span></h4><div class="themerow" id="themes"></div></div>'+
+     '<div class="card"><h4><span>CUSTOM ACCENT</span><span class="mu">any color · recolors everything</span></h4><div class="row" id="accents" style="align-items:center"></div></div>'+
+     '<div class="card"><h4><span>SOUND &amp; DISPLAY</span><span class="mu">synthesized, no files</span></h4>'+
+       '<label class="row" style="gap:8px;cursor:pointer;margin:0 0 8px;font-size:12px"><input type="checkbox" id="sfOn"'+(SFX.on?' checked':'')+'> UI &amp; game sounds</label>'+
+       '<label class="row" style="gap:8px;cursor:pointer;margin:0;font-size:12px"><input type="checkbox" id="crtOn"'+(CRT.on?' checked':'')+'> CRT scanlines</label></div>'+
+     '<div class="card"><h4><span>MATRIX RAIN</span><label class="row" style="gap:6px;cursor:pointer;margin:0"><input type="checkbox" id="rnOn"'+(RAIN.on?' checked':'')+'> on</label></h4>'+
+       '<div class="col" style="gap:9px">'+
+         '<label class="mu" style="font-size:10px">SPEED <input type="range" id="rnSpeed" min="2" max="100" value="'+RAIN.speed+'" style="width:100%"></label>'+
+         '<label class="mu" style="font-size:10px">DENSITY <input type="range" id="rnDensity" min="10" max="100" value="'+RAIN.density+'" style="width:100%"></label>'+
+         '<label class="mu" style="font-size:10px">OPACITY <input type="range" id="rnOpacity" min="0" max="35" value="'+RAIN.opacity+'" style="width:100%"></label>'+
+         '<div class="row"><label class="mu" style="font-size:10px;flex:1">GLYPHS <select class="in" id="rnGlyph">'+['katakana','binary','code','hex','runes'].map(function(g){return '<option'+(RAIN.glyph===g?' selected':'')+'>'+g+'</option>'}).join('')+'</select></label>'+
+           '<label class="mu" style="font-size:10px">COLOR<br><input type="color" id="rnColor" value="'+RAIN.color+'" style="width:44px;height:30px;background:none;border:1px solid var(--deep);border-radius:6px"></label></div>'+
+         '<button class="btn sm ghost" id="rnMatch" type="button">match accent color</button>'+
+       '</div></div>'+
+     '<div class="card" id="cfInstall"></div>'+
+     '<div class="card"><h4><span>DATA</span></h4><div class="col"><button class="btn sm" id="cfBackup" type="button">export my data (.json)</button><button class="btn sm ghost" id="cfImport" type="button">import data</button><button class="btn warn sm" id="cfReset" type="button">reset everything</button></div></div>'+
+     '<div class="card"><h4><span>ABOUT</span></h4><div class="mu" style="font-size:11px;line-height:1.7">NEXUS // GRID v6.0 — a hacker social OS, academy, sandbox &amp; market in one page. Built by @'+esc(ME.handle)+'. '+(CAP.db?'<span class="ok">GRID online.</span>':'Running local. Publish to go live.')+'</div></div></div>';
+   var tr=$('#themes',b);if(tr)Object.keys(THEMES).forEach(function(id){var t=THEMES[id];var bn=el('button','themechip'+(ME.theme===id?' on':''));bn.type='button';bn.innerHTML='<span class="swatch" style="background:'+t.accent+'"></span>'+t.name;bn.onclick=function(){applyTheme(id);$$('#themes .themechip',b).forEach(function(x){x.classList.remove('on')});bn.classList.add('on');APPS.settings.render(b)};tr.appendChild(bn)});
+   var acc=['#00ff7b','#19e0ff','#b48cff','#ffb000','#ff4466','#7dff2e'];var ab=$('#accents',b);
+   acc.forEach(function(c){var bn=el('button','');bn.type='button';bn.style.cssText='width:30px;height:30px;border-radius:50%;border:2px solid '+(ME.color===c?'#fff':'transparent')+';background:'+c+';cursor:pointer';bn.setAttribute('aria-label','accent '+c);bn.onclick=function(){applyAccent(c);toast('accent updated');APPS.settings.render(b)};ab.appendChild(bn)});
+   var anyc=el('input','');anyc.type='color';anyc.id='accAny';anyc.value=ME.color;anyc.setAttribute('aria-label','pick any accent color');anyc.style.cssText='width:44px;height:30px;background:none;border:1px solid var(--deep);border-radius:6px;margin-left:auto';
+   anyc.oninput=function(){applyAccent(this.value)};anyc.onchange=function(){toast('accent updated');APPS.settings.render(b)};ab.appendChild(anyc);
+   var sf=$('#sfOn',b);if(sf)sf.onchange=function(){SFX.on=this.checked;LS.set('grid:sfx',SFX.on?'1':'0');if(SFX.on)sfx('ok');toast('sound '+(SFX.on?'on':'off'))};
+   paintInstall();
+   var cr=$('#crtOn',b);if(cr)cr.onchange=function(){CRT.on=this.checked;LS.set('grid:crt',CRT.on?'1':'0');applyCrt()};
+   var rnOn=$('#rnOn',b);if(rnOn)rnOn.onchange=function(){RAIN.on=this.checked;applyRain()};
+   var bindR=function(id,key){var e=$(id,b);if(e)e.oninput=function(){RAIN[key]=+this.value;applyRain()}};
+   bindR('#rnSpeed','speed');bindR('#rnDensity','density');bindR('#rnOpacity','opacity');
+   var rg=$('#rnGlyph',b);if(rg)rg.onchange=function(){RAIN.glyph=this.value;saveRain();toast('rain glyphs: '+this.value)};
+   var rc=$('#rnColor',b);if(rc)rc.oninput=function(){RAIN.color=this.value;saveRain()};
+   var rm=$('#rnMatch',b);if(rm)rm.onclick=function(){RAIN.color=ME.color;if(rc)rc.value=ME.color;saveRain();toast('rain matched to accent')};
+   $('#cfBackup',b).onclick=function(){var dump={me:ME,feed:feedLocal(),friends:friends(),vault:LS.get('grid:vault'),market:LS.j('grid:market',null)};
+     modal('<h3 class="h" style="font-size:14px">YOUR DATA</h3><div class="sub">copy this — it\'s everything the GRID knows about you</div><textarea class="in" style="min-height:200px" readonly>'+esc(JSON.stringify(dump,null,2))+'</textarea><button class="btn pri sm" style="margin-top:8px" type="button" onclick="this.closest(\'#modal\').hidden=true">done</button>')};
+   $('#cfImport',b).onclick=function(){modal('<h3 class="h" style="font-size:14px">IMPORT</h3><textarea class="in" id="imp" style="min-height:160px" placeholder="paste exported json"></textarea><button class="btn pri sm" id="impGo" style="margin-top:8px" type="button">restore</button>');$('#impGo').onclick=function(){try{var d=JSON.parse($('#imp').value);if(d.me){ME=d.me;saveMe()}if(d.feed)feedSaveLocal(d.feed);if(d.friends)LS.sj('grid:friends',d.friends);if(d.vault)LS.set('grid:vault',d.vault);closeModal();toast('restored');paintProfileBits()}catch(e){toast('bad json')}}};
+   $('#cfReset',b).onclick=function(){modal('<h3 class="h" style="font-size:14px">RESET?</h3><div class="sub">wipes your profile, XP, posts &amp; notes from this browser. cannot be undone.</div><div class="row"><button class="btn warn" id="rsGo" type="button">yes, wipe it</button><button class="btn ghost" type="button" onclick="this.closest(\'#modal\').hidden=true">cancel</button></div>');$('#rsGo').onclick=function(){['grid:me','grid:feed','grid:friends','grid:vault','grid:market'].forEach(function(k){try{localStorage.removeItem(k)}catch(e){}});location.reload()}};
+ }};
+
+/* ---------- DAILY QUESTS ---------- */
+var QUESTS=[{id:'post',t:'Post to the GRID',xp:10},{id:'learn',t:'Finish an Academy lesson',xp:15},{id:'flag',t:'Capture a Sandbox flag',xp:20},{id:'play',t:'Win an Arcade match',xp:10},{id:'chat',t:'Message a crew channel',xp:5},{id:'ask',t:'Ask ORACLE a question',xp:5}];
+function todayKey(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}   // local day, not UTC
+function dayGap(a,b){return Math.round((new Date(b)-new Date(a))/86400000)}
+function questState(){var q=LS.j('grid:quests',{day:'',done:{}});if(q.day!==todayKey()){q={day:todayKey(),done:{}};LS.sj('grid:quests',q);
+   if(ME.lastDay&&dayGap(ME.lastDay,todayKey())>1){ME.streak=0;saveMe()}}   // missed a day: streak lapses
+  return q}
+function bumpQuest(id){var q=questState();if(q.done[id])return;q.done[id]=1;LS.sj('grid:quests',q);
+  var t=todayKey();if(ME.lastDay!==t){ME.streak=(ME.lastDay&&dayGap(ME.lastDay,t)===1)?(ME.streak||0)+1:1;ME.lastDay=t;saveMe()}   // first op of the day extends the streak
+  var qq=QUESTS.filter(function(x){return x.id===id})[0];if(qq)addXP(qq.xp,'daily op');paintQuests();
+  if(QUESTS.every(function(x){return q.done[x.id]})){setTimeout(function(){toast('all daily ops cleared · streak '+ME.streak);},800)}}
+function paintQuests(){var box=$('#quests');if(!box)return;var q=questState();
+  box.innerHTML=QUESTS.map(function(x){var d=q.done[x.id];return '<div class="quest'+(d?' done':'')+'"><span class="ck">'+(d?'✓':'')+'</span><span>'+esc(x.t)+'</span><em>+'+x.xp+'</em></div>'}).join('');
+  $('#streak').innerHTML=ic('flame')+' '+(ME.streak||0);
+}
+
+/* ================= INIT ================= */
+function start(){
+  focusOrder();
+  if(typeof applyIcons==='function')applyIcons();
+  if(typeof applyTheme==='function'&&ME.theme)applyTheme(ME.theme,true);
+  if(typeof applyCrt==='function')applyCrt();
+  rain();boot();tick();setInterval(tick,1000);
+  paintDesktop();paintProfileBits();paintQuests();sysmon();setInterval(sysmon,5000);
+  feedState.items=feedLocal();paintHomeFeed();
+  meStats();paintStart();setTimeout(achCheck,2500);   // credit past work once the desk has settled
+  initCaps();
+  // open the GRID first so it feels alive
+}
+if(document.readyState!=='loading')start();else document.addEventListener('DOMContentLoaded',start);
+})();
+</script>

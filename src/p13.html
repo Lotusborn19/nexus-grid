@@ -1,0 +1,277 @@
+<script>
+/* ================= SOUND — tiny synthesized cues, no audio files ================= */
+var SFX={on:LS.get('grid:sfx')!=='0',ctx:null};
+function sfxCtx(){
+  if(!SFX.ctx){try{SFX.ctx=new (window.AudioContext||window.webkitAudioContext)()}catch(e){return null}}
+  if(SFX.ctx&&SFX.ctx.state==='suspended')SFX.ctx.resume().catch(function(){});
+  return SFX.ctx;
+}
+function sfxTone(c,f0,f1,t0,dur,type,vol){
+  var o=c.createOscillator(),g=c.createGain();
+  o.type=type;o.frequency.setValueAtTime(f0,t0);if(f1!==f0)o.frequency.exponentialRampToValueAtTime(Math.max(30,f1),t0+dur);
+  g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(vol,t0+0.004);g.gain.exponentialRampToValueAtTime(0.0004,t0+dur);
+  o.connect(g);g.connect(c.destination);o.start(t0);o.stop(t0+dur+0.02);
+}
+function sfx(name){
+  if(!SFX.on)return;var c=sfxCtx();if(!c)return;var t=c.currentTime;
+  switch(name){
+    case 'tick':sfxTone(c,1700,1400,t,0.03,'square',0.025);break;
+    case 'ok':sfxTone(c,660,660,t,0.09,'sine',0.06);sfxTone(c,990,990,t+0.07,0.12,'sine',0.055);break;
+    case 'bad':sfxTone(c,330,140,t,0.2,'sawtooth',0.045);break;
+    case 'lock':sfxTone(c,1300,1300,t,0.07,'triangle',0.08);sfxTone(c,2600,2600,t,0.05,'sine',0.03);break;
+    case 'flag':sfxTone(c,523,523,t,0.1,'square',0.04);sfxTone(c,784,784,t+0.09,0.1,'square',0.04);sfxTone(c,1046,1046,t+0.18,0.2,'square',0.045);break;
+    case 'ach':sfxTone(c,880,880,t,0.09,'sine',0.06);sfxTone(c,1174,1174,t+0.08,0.09,'sine',0.06);sfxTone(c,1760,1760,t+0.16,0.18,'sine',0.05);break;
+    case 'rank':[523,659,784,1046,1318].forEach(function(f,i){sfxTone(c,f,f,t+i*0.09,0.22,'triangle',0.06)});break;
+    case 'open':sfxTone(c,340,680,t,0.08,'sine',0.035);break;
+  }
+}
+// one quiet tick for taps on real controls; nothing else clicks
+document.addEventListener('click',function(e){
+  var el2=e.target&&e.target.closest&&e.target.closest('button,.ic,.tab');
+  if(el2)sfx('tick');
+},true);
+
+/* ================= STATS + EVENT BUS — everything engaging hangs off this ================= */
+function meStats(){
+  if(!ME.stats){
+    ME.stats={posts:0,msgs:0,flags:0,lessons:0,wins:0,asks:0,likes:0};
+    // backfill from what this profile has already done, so nobody loses credit
+    if(ME.done)ME.stats.flags=Object.keys(ME.done).length;
+    if(typeof COURSES!=='undefined')COURSES.forEach(function(co){var p=LS.j('grid:course:'+co.id,null);if(p&&p.done)ME.stats.lessons+=p.done.length});
+    saveMe();
+  }
+  return ME.stats;
+}
+function GE(type){            // gridEvent: one call per meaningful action
+  var s=meStats();
+  if(s[type+'s']!=null){s[type+'s']++}
+  if((ME.streak||0)>(ME.bestStreak||0)){ME.bestStreak=ME.streak}
+  saveMe();
+  crewBump(type);
+  achCheck();
+  if(typeof paintStart==='function')paintStart();
+}
+
+/* ================= ACHIEVEMENTS — long-arc goals with visible progress ================= */
+var ACH=[
+ {id:'first_blood',n:'First Blood',d:'post your first transmission',icon:'feed',need:1,cur:function(){return meStats().posts}},
+ {id:'broadcaster',n:'Broadcaster',d:'10 transmissions on the GRID',icon:'feed',need:10,cur:function(){return meStats().posts}},
+ {id:'voice',n:'Voice of the Crew',d:'25 crew messages',icon:'crews',need:25,cur:function(){return meStats().msgs}},
+ {id:'flag_1',n:'Flag Runner',d:'capture a sandbox flag',icon:'sandbox',need:1,cur:function(){return meStats().flags}},
+ {id:'flag_5',n:'Flag Collector',d:'5 flags captured',icon:'sandbox',need:5,cur:function(){return meStats().flags}},
+ {id:'flag_all',n:'Flag Master',d:'every sandbox flag',icon:'bounty',need:9,cur:function(){return Math.min(9,Object.keys(ME.done||{}).filter(function(k){return k[0]==='c'}).length)}},
+ {id:'blackout',n:'Blackout Contained',d:'finish OPERATION BLACKOUT',icon:'guard',need:4,cur:function(){return LS.j('grid:op:blackout',{st:0}).st}},
+ {id:'scholar',n:'Scholar',d:'3 Academy lessons',icon:'academy',need:3,cur:function(){return meStats().lessons}},
+ {id:'professor',n:'Deep Diver',d:'15 Academy lessons',icon:'academy',need:15,cur:function(){return meStats().lessons}},
+ {id:'gamer',n:'Player One',d:'win an arcade match',icon:'games',need:1,cur:function(){return meStats().wins}},
+ {id:'champion',n:'Arcade Champion',d:'10 arcade wins',icon:'medal',need:10,cur:function(){return meStats().wins}},
+ {id:'curious',n:'Curious Mind',d:'ask ORACLE 5 questions',icon:'companion',need:5,cur:function(){return meStats().asks}},
+ {id:'streak_3',n:'Three-Day Burn',d:'a 3-day daily-op streak',icon:'flame',need:3,cur:function(){return Math.max(ME.bestStreak||0,ME.streak||0)}},
+ {id:'streak_7',n:'Week of Fire',d:'a 7-day streak',icon:'flame',need:7,cur:function(){return Math.max(ME.bestStreak||0,ME.streak||0)}},
+ {id:'operator_r',n:'Operator',d:'reach 100 XP',icon:'profile',need:100,cur:function(){return ME.xp}},
+ {id:'breaker_r',n:'Breaker',d:'reach 800 XP',icon:'crypto',need:800,cur:function(){return ME.xp}}
+];
+function achCheck(){
+  ME.ach=ME.ach||{};
+  var newly=[];
+  ACH.forEach(function(a){if(!ME.ach[a.id]&&a.cur()>=a.need){ME.ach[a.id]=now();newly.push(a)}});
+  if(newly.length){
+    saveMe();
+    newly.forEach(function(a,i){setTimeout(function(){sfx('ach');toast('ACHIEVEMENT · '+a.n)},400+i*1400)});
+    // the XP award runs after the toasts queue so a rank-up lands last
+    setTimeout(function(){addXP(newly.length*15,'achievement'+(newly.length>1?'s':''));paintAch()},300);
+  }
+  return newly.length;
+}
+function achRenderInto(box){
+  ME.ach=ME.ach||{};
+  var got=ACH.filter(function(a){return ME.ach[a.id]}).length;
+  box.innerHTML='<h4><span>ACHIEVEMENTS</span><span>'+got+' / '+ACH.length+'</span></h4><div class="achgrid">'+
+    ACH.map(function(a){
+      var done=!!ME.ach[a.id],cur=Math.min(a.need,a.cur()),pc=Math.round(cur/a.need*100);
+      return '<div class="achcell'+(done?' got':'')+'" title="'+esc(a.d)+'">'+
+        '<span class="aic">'+ic(a.icon)+'</span><b>'+esc(a.n)+'</b><i>'+esc(a.d)+'</i>'+
+        (done?'<em class="ok">UNLOCKED</em>':'<span class="track"><span class="fill" style="width:'+pc+'%"></span></span><em>'+cur+' / '+a.need+'</em>')+
+      '</div>'}).join('')+'</div>';
+}
+function paintAch(){var box=$('#pfAch');if(box)achRenderInto(box)}
+
+/* ================= CREW OPS — a weekly objective your crew grinds together ================= */
+var CREWS=[
+ {id:'null',n:'NULL DIVISION',c:'#19e0ff',m:'we read the source'},
+ {id:'ghost',n:'GHOST SECTION',c:'#b48cff',m:'never logged, never seen'},
+ {id:'volt',n:'VOLT SYNDICATE',c:'#ffb000',m:'hardware is truth'},
+ {id:'root',n:'ROOT CARTEL',c:'#ff5277',m:'take the shell, keep the shell'}
+];
+var CREW_OPS=[
+ {id:'flag',t:'FLAG RUSH',d:'capture sandbox flags',unit:'flags'},
+ {id:'win',t:'ARCADE SEASON',d:'win arcade matches',unit:'wins'},
+ {id:'post',t:'SIGNAL BOOST',d:'post writeups to the GRID',unit:'posts'},
+ {id:'lesson',t:'DEEP STUDY',d:'finish Academy lessons',unit:'lessons'}
+];
+function weekKey(){ // ISO-ish week key, local time
+  var d=new Date();var on=new Date(d.getFullYear(),0,1);
+  var wk=Math.floor(((d-on)/86400000+on.getDay())/7);
+  return d.getFullYear()+'w'+pad(wk);
+}
+function weekNum(){return parseInt(weekKey().replace(/\D/g,''),10)}
+function crewOp(){return CREW_OPS[weekNum()%CREW_OPS.length]}
+function myCrew(){return CREWS.filter(function(c){return c.id===ME.crew})[0]||null}
+function crewState(){
+  var s=LS.j('grid:crewops',{week:'',pts:0});
+  if(s.week!==weekKey()){s={week:weekKey(),pts:0};LS.sj('grid:crewops',s)}
+  return s;
+}
+function crewBump(type){
+  if(!ME.crew||crewOp().id!==type)return;
+  var s=crewState();s.pts++;LS.sj('grid:crewops',s);
+  if(CAP.db){try{CAP.db.collection('crewops').doc(weekKey()+':'+(ME.serverId||ME.handle)).set({week:weekKey(),crew:ME.crew,h:ME.handle,pts:s.pts,t:now()}).catch(function(){})}catch(e){}}
+  var el3=$('#crMine');if(el3)el3.textContent=s.pts;
+  paintCrewBar();
+}
+// standings count real points only: yours, plus other operators' when the GRID db is live
+function crewTotals(cb){
+  var t={};CREWS.forEach(function(c){t[c.id]=0});
+  if(ME.crew)t[ME.crew]+=crewState().pts;
+  if(CAP.db){
+    try{CAP.db.collection('crewops').where('week','==',weekKey()).get().then(function(snap){
+      snap.docs.forEach(function(d){var x=d.data();if(t[x.crew]!=null&&x.h!==ME.handle)t[x.crew]+=(x.pts||0)});cb(t)},function(){cb(t)})}catch(e){cb(t)}
+  }else cb(t);
+}
+function crewJoinModal(after){
+  modal('<h3 class="h" style="font-size:16px">CHOOSE YOUR CREW</h3>'+
+    '<div class="sub">your crew banks points toward the weekly op. switching later resets your week.</div>'+
+    '<div class="col" id="cjList" style="gap:8px"></div>');
+  var list=$('#cjList');
+  CREWS.forEach(function(c){
+    var bn=el('button','crewpick');bn.type='button';
+    bn.innerHTML='<span class="swatch" style="background:'+c.c+'"></span><span class="cn"><b>'+c.n+'</b><i>'+esc(c.m)+'</i></span>'+(ME.crew===c.id?'<em class="ok">YOURS</em>':'');
+    bn.onclick=function(){
+      if(ME.crew!==c.id){ME.crew=c.id;saveMe();LS.sj('grid:crewops',{week:weekKey(),pts:0});sfx('ok');toast('enlisted · '+c.n)}
+      closeModal();paintCrewBar();if(after)after();
+    };
+    list.appendChild(bn);
+  });
+}
+function crewStandingsModal(){
+  crewTotals(function(t){
+    var rows=CREWS.map(function(c){return{c:c,p:t[c.id]}}).sort(function(a,b){return b.p-a.p});
+    var op=crewOp();
+    modal('<h3 class="h" style="font-size:16px">'+op.t+' · WEEK STANDINGS</h3>'+
+      '<div class="sub">'+op.d+' — resets every week</div>'+
+      rows.map(function(r,i){
+        var mine=r.c.id===ME.crew,max=rows[0].p||1;
+        return '<div class="crewrow'+(mine?' mine':'')+'">'+
+          '<b class="pos">'+pad(i+1)+'</b><span class="swatch" style="background:'+r.c.c+'"></span>'+
+          '<span class="cn">'+r.c.n+(mine?' <em class="ok">· you</em>':'')+'</span>'+
+          '<span class="bar"><i style="width:'+Math.round(r.p/max*100)+'%;background:'+r.c.c+'"></i></span><b>'+r.p+'</b></div>'}).join('')+
+      '<div class="mu" style="font-size:10px;margin-top:10px">'+(CAP.db?'live \u2014 every point here was banked by a real operator':'offline \u2014 only your own points are counted. other crews fill in when real operators are on the GRID')+(ME.crew?'':' \u00b7 you haven\u2019t enlisted yet')+'</div>'+
+      (ME.crew?'':'<button class="btn pri" id="csJoin" type="button" style="width:100%;margin-top:10px">ENLIST</button>'));
+    var j=$('#csJoin');if(j)j.onclick=function(){closeModal();crewJoinModal(crewStandingsModal)};
+  });
+}
+function paintCrewBar(){
+  var bar=$('#crewbar');if(!bar)return;
+  var op=crewOp(),c=myCrew();
+  bar.innerHTML=
+    '<span class="opn">'+ic('target')+' '+op.t+'</span><span class="opd hide-s">'+op.d+'</span><span class="sp"></span>'+
+    (c?'<button type="button" id="crCrew" class="crewtag"><span class="swatch" style="background:'+c.c+'"></span>'+c.n+' · <b id="crMine">'+crewState().pts+'</b> banked</button>'
+      :'<button type="button" id="crCrew" class="crewtag join">'+ic('crews')+' ENLIST IN A CREW</button>')+
+    '<button type="button" id="crStand" class="btn ghost sm">standings</button>';
+  $('#crCrew',bar).onclick=function(){crewJoinModal()};
+  $('#crStand',bar).onclick=crewStandingsModal;
+}
+
+/* ================= ORACLE'S HANDS — safe, whitelisted GRID actions ================= */
+function gridAct(kind,val){
+  val=String(val||'').trim();
+  if(kind==='open'){
+    var id=val.toLowerCase().replace(/\s+/g,'');
+    var alias={grid:'feed',thegrid:'feed',wire:'news',arcade:'games',oracle:'ai',config:'settings',vault:'notes',sentinel:'guard',operator:'profile',ideas:'suggest'};
+    id=alias[id]||id;
+    if(!APPS[id]){var hit=APP_ORDER.filter(function(a){return APPS[a].name.toLowerCase().indexOf(val.toLowerCase())>=0})[0];id=hit||id}
+    if(APPS[id]){openApp(id);sfx('open');return 'opened '+APPS[id].name}
+    return null;
+  }
+  if(kind==='theme'){
+    var tid=val.toLowerCase();
+    if(!THEMES[tid]){var th=Object.keys(THEMES).filter(function(k){return THEMES[k].name.toLowerCase().indexOf(tid)>=0})[0];tid=th||tid}
+    if(THEMES[tid]){applyTheme(tid);return 'theme → '+THEMES[tid].name}
+    return null;
+  }
+  if(kind==='rain'){
+    var want=/^(on|start|resume)$/i.test(val);
+    if(!want&&!/^(off|stop|pause)$/i.test(val))return null;
+    RAIN.on=want;applyRain();saveRain();return 'matrix rain '+(want?'on':'off');
+  }
+  if(kind==='draft'){
+    if(!val)return null;
+    openApp('feed');
+    setTimeout(function(){var t=$('#fTxt');if(t){t.value=val;t.focus()}},80);
+    return 'draft ready in The GRID — review & TRANSMIT';
+  }
+  return null;
+}
+function oraStats(){
+  var r=rankOf(ME.xp),nx=nextRank(ME.xp),s=meStats();
+  return 'rank '+r[0]+' at '+ME.xp+' XP'+(nx?' ('+(nx[1]-ME.xp)+' XP to '+nx[0]+')':' (max rank)')+
+    ' · streak '+(ME.streak||0)+'d · '+s.flags+' flags · '+s.wins+' arcade wins · '+s.lessons+' lessons · '+(ME.badges||[]).length+' badges';
+}
+// direct commands ORACLE handles instantly, even fully offline
+function oraLocalCmd(q){
+  var m=q.match(/^(?:open|launch|start)\s+(.+)$/i);
+  if(m){var r1=gridAct('open',m[1]);return r1?{t:'On it — '+r1+'.',did:[r1]}:{t:'I don’t see an app called “'+m[1].trim()+'”. Say “open arcade”, “open academy”, “open sandbox”…',did:[]}}
+  m=q.match(/^(?:theme|switch theme to|set theme(?: to)?)\s+(.+)$/i);
+  if(m){var r2=gridAct('theme',m[1]);return r2?{t:r2+'. Looks sharp.',did:[r2]}:{t:'No theme by that name. Options: '+Object.keys(THEMES).map(function(k){return THEMES[k].name}).join(', ')+'.',did:[]}}
+  m=q.match(/^(?:rain|matrix rain|matrix)\s+(on|off|start|stop|pause|resume)$/i);
+  if(m){var r3=gridAct('rain',m[1]);return r3?{t:r3+'.',did:[r3]}:null}
+  if(/^(?:my )?(?:stats|rank|xp|progress)\??$/i.test(q)||/how (?:far|close).*(rank|breaker|operator|ghost|level)/i.test(q))
+    return {t:'Here’s where you stand: **'+oraStats()+'**. Daily ops are the fastest XP — check the desk panel.',did:[]};
+  return null;
+}
+</script>
+<script>
+/* console API — poke the GRID from devtools (and from the test rig) */
+window.NX={
+  version:'7.0',
+  act:function(k,v){return gridAct(k,v)},        // NX.act('open','arcade')
+  ev:function(t){return GE(t)},                  // NX.ev('win')
+  crewOp:function(){return crewOp()},
+  sfx:function(n){sfx(n)},
+  oraSys:function(){return oraSystem()},
+  sb:function(line){return sbRun(line)},         // needs the Sandbox window open
+  rain:function(){return RAIN},
+  closeModal:function(){closeModal()},
+  stats:function(){return oraStats()}
+};
+</script>
+<script>
+/* ================= NO SIMS: one-time purge of demo data older builds shipped ================= */
+function dbDrop(col,id){try{var r=CAP.db.collection(col).doc(id);if(r&&r.delete)r.delete().catch(function(){})}catch(e){}}
+function purgeSims(){
+  if(LS.get('grid:nosim')==='2')return;
+  var FAKE={cipher:1,r00t_shell:1,sol_dev:1,nyx:1,ghost_proto:1,bit_witch:1,deckard_k:1};
+  function keep(key,test){var v=LS.j(key,null);if(v&&v.filter)LS.sj(key,v.filter(test))}
+  keep('grid:feed',function(p){return !SEED_IDS[p.id]});
+  keep('grid:sug',function(s){return !SUG_SEED_IDS[s.id]});
+  keep('grid:wall',function(m){return !/^w_(tom|cipher)/.test(m.id||'')});
+  keep('grid:flash',function(f){return f.id!=='fx1'&&f.id!=='fx2'});
+  keep('grid:friends',function(f){return !FAKE[f.h]});
+  keep('grid:market',function(m){return /^https?:\/\//i.test(m.url||'')});   // a listing without a real link is not a listing
+  if(ME.badges&&ME.badges.indexOf('verified')>=0){ME.badges=ME.badges.filter(function(x){return x!=='verified'});saveMe()}   // that badge never verified anything
+  CHANS.forEach(function(c){keep('grid:chat:'+c,function(m){return !(m.h==='cipher'&&/^welcome to /.test(m.txt||''))})});
+  LS.set('grid:nosim','2');
+}
+purgeSims();
+</script>
+<script>
+/* ORACLE only claims a model when one has actually answered or been reached */
+function oraHasModel(){return !!CAP.sample||ORA.alive===true}
+function oraIntroText(){return oraHasModel()?"I'm **ORACLE**. A model is connected, so ask me anything. I **remember** what you tell me (say `remember: …`), I can run GRID commands like `open arcade`, and I can **drive your robot** once its URL is in **setup**.":"I'm **ORACLE**. **No AI model is connected right now**, so I can't answer questions yet. Add your Ollama URL in **setup**, or open the GRID on claude.ai. Until then I can run GRID commands — `open arcade`, `theme ember`, `rain off`, `my stats` — and store notes with `remember: …`."}
+function oraProbe(cb){
+  if(CAP.sample||ORA.backend==='offline'||ORA.backend==='claude'){cb();return}
+  var done=false,fin=function(v){if(done)return;done=true;ORA.alive=v;cb()};
+  try{var ac=new AbortController();setTimeout(function(){ac.abort();fin(false)},1800);
+    fetch(ORA.ollama.replace(/\/$/,'')+'/api/tags',{signal:ac.signal}).then(function(r){fin(!!r.ok)},function(){fin(false)})}catch(e){fin(false)}
+}
+</script>

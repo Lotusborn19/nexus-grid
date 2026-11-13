@@ -1,0 +1,25 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'io.nexusgrid.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'io.nexusgrid.app'
+        minSdk 24
+        targetSdk 34
+        versionCode 7
+        versionName '7.0'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    buildTypes {
+        release { minifyEnabled false }
+    }
+}
+// No dependencies on purpose: the app is a WebView around assets/index.html,
+// which the GitHub Actions workflow copies in from the repo root before building.

@@ -1,0 +1,191 @@
+<script>
+/* ================= COMMAND PALETTE ( / or Ctrl+K ) ================= */
+var PAL={sel:0,rows:[]};
+function appBody(id){openApp(id);var w=openApps[id];return w?$('.wbody',w):null}
+function palCommands(){
+  var c=[];
+  APP_ORDER.forEach(function(id){var a=APPS[id];c.push({k:'app',t:a.name,s:a.cat,i:a.icon,run:function(){openApp(id)}})});
+  GAMES.forEach(function(g){c.push({k:'game',t:'Play '+g.t,s:'Arcade',i:g.ic,run:function(){
+    GAME_TAB='arcade';var b=appBody('games');if(!b)return;APPS.games.render(b);g.play($('#gmBody',b),b)}})});
+  COURSES.forEach(function(co){c.push({k:'course',t:co.t,s:'Academy',i:co.ic,run:function(){var b=appBody('academy');if(b)acCourse(b,co)}})});
+  Object.keys(THEMES).forEach(function(id){c.push({k:'theme',t:'Theme · '+THEMES[id].name,s:'Config',i:ic('palette'),run:function(){
+    applyTheme(id);if(openApps.settings)APPS.settings.render($('.wbody',openApps.settings))}})});
+  c.push({k:'action',t:'New transmission',s:'post to the GRID',i:ic('feed'),run:function(){var b=appBody('feed');if(b){var t=$('#fTxt',b);if(t)t.focus()}}});
+  c.push({k:'action',t:(RAIN.on?'Pause':'Resume')+' matrix rain',s:'Config',i:ic('pulse'),run:function(){RAIN.on=!RAIN.on;applyRain();toast('matrix rain '+(RAIN.on?'on':'paused'));if(openApps.settings)APPS.settings.render($('.wbody',openApps.settings))}});
+  c.push({k:'action',t:'Leaderboard',s:'Arcade',i:ic('medal'),run:function(){GAME_TAB='leader';var b=appBody('games');if(b)APPS.games.render(b)}});
+  c.push({k:'action',t:'Crew standings',s:'Social',i:ic('crews'),run:crewStandingsModal});
+  c.push({k:'action',t:'Achievements',s:'You',i:ic('medal'),run:function(){openApp('profile')}});
+  c.push({k:'action',t:(SFX.on?'Mute':'Unmute')+' sound',s:'Config',i:ic('pulse'),run:function(){SFX.on=!SFX.on;LS.set('grid:sfx',SFX.on?'1':'0');toast('sound '+(SFX.on?'on':'off'))}});
+  c.push({k:'action',t:'Close all windows',s:'desktop',i:ic('control'),run:function(){Object.keys(openApps).forEach(closeApp)}});
+  return c;
+}
+function palScore(q,t){
+  t=t.toLowerCase();var i=t.indexOf(q);
+  if(i>=0)return 200-i*2-(t.length-q.length)*.2;          // direct hit, earlier + tighter is better
+  var qi=0,run=0,sc=0;for(var k=0;k<t.length&&qi<q.length;k++){if(t[k]===q[qi]){qi++;run++;sc+=run}else run=0}
+  return qi===q.length?sc:-1;                               // loose subsequence match
+}
+function palPaint(){
+  var q=$('#palq').value.trim(),lq=q.toLowerCase(),all=palCommands(),rows;
+  if(!lq)rows=all.filter(function(c){return c.k==='app'||c.k==='action'});
+  else{rows=all.map(function(c){return{c:c,s:Math.max(palScore(lq,c.t),palScore(lq,c.s)-40)}}).filter(function(x){return x.s>=0})
+        .sort(function(a,b){return b.s-a.s}).slice(0,12).map(function(x){return x.c});
+    rows.push({k:'oracle',t:'Ask ORACLE: “'+q+'”',s:'companion',i:ic('companion'),run:function(){
+      var b=appBody('ai');if(!b)return;var inp=$('#aiIn',b),go=$('#aiSend',b);if(inp&&go){inp.value=q;go.click()}}})}
+  PAL.rows=rows;if(PAL.sel>=rows.length)PAL.sel=0;
+  var list=$('#pallist');list.innerHTML='';
+  rows.forEach(function(r,n){
+    var b=el('button','palrow'+(n===PAL.sel?' on':''));b.type='button';
+    b.innerHTML='<span class="pi">'+r.i+'</span><span class="pt">'+esc(r.t)+'</span><span class="ps">'+esc(r.s)+'</span>';
+    b.onclick=function(){palRun(n)};b.onmousemove=function(){if(PAL.sel!==n){PAL.sel=n;palMark()}};
+    list.appendChild(b)});
+}
+function palMark(){$$('#pallist .palrow').forEach(function(r,n){r.classList.toggle('on',n===PAL.sel)});
+  var on=$('#pallist .palrow.on');if(on&&on.scrollIntoView)on.scrollIntoView({block:'nearest'})}
+function palRun(n){var r=PAL.rows[n];if(!r)return;palClose();try{r.run()}catch(e){toast('could not run: '+e.message)}}
+function palOpen(){hideStart();$('#pal').hidden=false;$('#palq').value='';PAL.sel=0;palPaint();setTimeout(function(){$('#palq').focus()},20)}
+function palClose(){$('#pal').hidden=true}
+$('#palIc').innerHTML=ic('search');$('#tPalIc').innerHTML=ic('search');
+$('#tPal').onclick=palOpen;
+$('#pal').addEventListener('mousedown',function(e){if(e.target===this)palClose()});
+$('#palq').addEventListener('input',function(){PAL.sel=0;palPaint()});
+$('#palq').addEventListener('keydown',function(e){
+  if(e.key==='ArrowDown'){PAL.sel=(PAL.sel+1)%Math.max(1,PAL.rows.length);palMark();e.preventDefault()}
+  else if(e.key==='ArrowUp'){PAL.sel=(PAL.sel-1+PAL.rows.length)%Math.max(1,PAL.rows.length);palMark();e.preventDefault()}
+  else if(e.key==='Enter'){palRun(PAL.sel);e.preventDefault()}
+});
+document.addEventListener('keydown',function(e){
+  var t=e.target,typing=t&&(/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)||t.isContentEditable);
+  if((e.ctrlKey||e.metaKey)&&(e.key==='k'||e.key==='K')){e.preventDefault();$('#pal').hidden?palOpen():palClose();return}
+  if(e.key==='/'&&!typing&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();palOpen();return}
+  if(e.key==='Escape'){
+    if(!$('#pal').hidden)palClose();
+    else if(!$('#rankup').hidden)$('#rankup').hidden=true;
+    else if(!$('#modal').hidden)closeModal();
+    else if(startOpen)hideStart();
+  }
+});
+
+/* ================= RANK-UP MOMENT ================= */
+function rankUp(r){
+  var o=$('#rankup'),nx=nextRank(ME.xp);
+  $('#ruName').textContent=r[0].replace('_',' ');
+  $('#ruSub').textContent=nx?('next · '+nx[0].replace('_',' ')+' at '+nx[1]+' XP'):'top of the ladder. respect.';
+  sfx('rank');
+  o.hidden=false;o.classList.remove('go');void o.offsetWidth;o.classList.add('go');
+  clearTimeout(rankUp.t);rankUp.t=setTimeout(function(){o.hidden=true},3200);
+}
+$('#rankup').onclick=function(){this.hidden=true};
+
+/* ================= FIRST-RUN: claim a handle + pick a signal ================= */
+function afterBoot(){
+  if(ME.onboarded)return;
+  ME.onboarded=true;saveMe();
+  if(ME.xp>0||ME.handle!=='operator')return;                 // returning operator from an older build
+  modal('<h3 class="h" style="font-size:17px">IDENTIFY YOURSELF</h3>'+
+    '<div class="sub">NEXUS turns your phone into a hacker workstation and teaches you to use it. Pick a handle and a signal color \u2014 both can be changed later in Config.</div>'+
+    '<input class="in" id="obH" maxlength="24" placeholder="handle — e.g. ghost_proto" autocomplete="off" style="width:100%;font-size:15px">'+
+    '<div class="themerow" id="obT" style="margin:12px 0"></div>'+
+    '<div class="obops"><b>FIRST OPS</b><span>finish one Academy lesson</span><span>capture a Sandbox flag</span><span>connect the Termux bridge</span><em>each one pays XP toward your first rank</em></div>'+
+    '<div class="row" style="margin-top:14px"><button class="btn pri" id="obGo" type="button" style="flex:1">ENTER THE GRID</button><button class="btn ghost" id="obSkip" type="button">skip</button></div>');
+  var tr=$('#obT');
+  Object.keys(THEMES).forEach(function(id){var t=THEMES[id],bn=el('button','themechip'+((ME.theme||'phosphor')===id?' on':''));bn.type='button';
+    bn.innerHTML='<span class="swatch" style="background:'+t.accent+'"></span>'+t.name;
+    bn.onclick=function(){applyTheme(id,true);$$('.themechip',tr).forEach(function(x){x.classList.remove('on')});bn.classList.add('on')};tr.appendChild(bn)});
+  function go(){var h=$('#obH').value.trim().replace(/\s+/g,'_').replace(/^@+/,'');
+    if(h){ME.handle=h;saveMe();paintProfileBits();tick()}
+    closeModal();toast('welcome to the GRID, @'+ME.handle)}
+  $('#obGo').onclick=go;$('#obSkip').onclick=closeModal;
+  $('#obH').addEventListener('keydown',function(e){if(e.key==='Enter')go()});
+  if(!isMobile())setTimeout(function(){var i=$('#obH');if(i)i.focus()},60);
+}
+
+/* ================= ARCADE: SIGNAL LOCK (timing) ================= */
+function gameEnd(body,b,o){   // shared result screen: o={title,cls,big,line,again}
+  body.innerHTML='<h3 class="h '+o.cls+'">'+o.title+'</h3><div class="card" style="text-align:center"><div class="big" style="font:700 40px var(--display);color:var(--green)">'+o.big+'</div><div class="mu">'+o.line+'</div></div>'+
+    '<div class="row"><button class="btn pri" id="geAgain" type="button">play again</button><button class="btn ghost" id="geLead" type="button">leaderboard</button><button class="btn ghost" id="geBack" type="button">arcade</button></div>';
+  $('#geAgain',body).onclick=o.again;$('#geBack',body).onclick=function(){gmRender(b)};
+  $('#geLead',body).onclick=function(){GAME_TAB='leader';APPS.games.render(b)};
+}
+function playSignal(body,b){
+  var R=5,round=0,score=0,hits=0;
+  function setup(){
+    var w=26-round*4,a=6+Math.random()*(88-w),mid=a+w/2,speed=58+round*20,pos=Math.random()*100,dir=Math.random()<.5?1:-1,locked=false,last=0;
+    body.innerHTML='<button class="btn ghost sm" id="sgBack" type="button">◄ arcade</button>'+
+      '<h3 class="h" style="font-size:15px;margin-top:8px">SIGNAL LOCK</h3>'+
+      '<div class="sub">Stop the sweep inside the band. Dead centre pays double. The band narrows and the sweep speeds up each round.</div>'+
+      '<div class="row" style="justify-content:space-between;margin-bottom:8px"><b>ROUND '+(round+1)+'/'+R+'</b><span class="ok" id="sgScore">'+score+' pts</span></div>'+
+      '<div class="sig" id="sgTrack"><div class="sigzone" style="left:'+a+'%;width:'+w+'%"><i></i></div><div class="signeedle" id="sgN" style="left:'+pos+'%"></div></div>'+
+      '<button class="btn pri" id="sgGo" type="button" style="width:100%;padding:16px;font-size:15px;letter-spacing:4px">LOCK</button>'+
+      '<div class="mu" id="sgMsg" style="font-size:11px;margin-top:8px;min-height:18px">tap LOCK, tap the bar, or press space</div>';
+    var nd=$('#sgN',body),tr=$('#sgTrack',body),msg=$('#sgMsg',body),btn=$('#sgGo',body);
+    $('#sgBack',body).onclick=function(){gmRender(b)};
+    function frame(ts){
+      if(!nd.isConnected||locked)return;                      // window closed or round over → loop ends itself
+      var dt=last?Math.min(50,ts-last):0;last=ts;
+      pos+=dir*speed*dt/1000;if(pos>=100){pos=100;dir=-1}else if(pos<=0){pos=0;dir=1}
+      nd.style.left=pos+'%';requestAnimationFrame(frame);
+    }
+    function lock(){
+      if(locked)return;locked=true;btn.disabled=true;
+      var d=Math.abs(pos-mid),half=w/2,pts=0;
+      if(d<=half){pts=Math.round(10+10*(1-d/half));hits++;score+=pts;tr.classList.add('hit');sfx('lock');msg.innerHTML='<b class="ok">LOCKED</b> · +'+pts+(pts>=18?' · dead centre':'')}
+      else{tr.classList.add('miss');sfx('bad');msg.innerHTML='<b class="bad">SIGNAL LOST</b> · off by '+Math.round(d-half)+'%'}
+      $('#sgScore',body).textContent=score+' pts';
+      setTimeout(function(){if(!nd.isConnected)return;round++;if(round<R)setup();else done()},750);
+    }
+    btn.onclick=lock;tr.onclick=lock;if(!isMobile())btn.focus();
+    requestAnimationFrame(frame);
+  }
+  function done(){
+    var xp=Math.round(score/2),best=LS.j('grid:best:signal',0);if(score>best){LS.sj('grid:best:signal',score);best=score}
+    if(xp>0)addXP(xp,'signal lock');if(hits>=3){bumpQuest('play');GE('win')}
+    gameEnd(body,b,{title:hits>=3?'SIGNAL ACQUIRED':'SIGNAL DROPPED',cls:hits>=3?'ok':'bad',big:score+' pts',line:hits+'/'+R+' locks · +'+xp+' XP · best '+best,again:function(){playSignal(body,b)}});
+  }
+  setup();
+}
+
+/* ================= ARCADE: TRACE ROUTE (memory) ================= */
+function playTrace(body,b){
+  var seq=[],inp=0,level=0,lock=true;
+  body.innerHTML='<button class="btn ghost sm" id="trBack" type="button">◄ arcade</button>'+
+    '<h3 class="h" style="font-size:15px;margin-top:8px">TRACE ROUTE</h3>'+
+    '<div class="sub">A packet hops across the mesh. Watch the route, then replay it node by node. Every level adds a hop.</div>'+
+    '<div class="row" style="justify-content:space-between;margin-bottom:8px"><b id="trLv">HOP 1</b><span class="am" id="trSt">watch…</span></div>'+
+    '<div class="tgrid" id="trGrid"></div>';
+  $('#trBack',body).onclick=function(){gmRender(b)};
+  var grid=$('#trGrid',body),nodes=[],st=$('#trSt',body);
+  for(var i=0;i<9;i++)(function(i){var n=el('button','tnode','<i></i>');n.type='button';n.dataset.i=i;n.setAttribute('aria-label','node '+(i+1));
+    n.onclick=function(){tap(i,n)};grid.appendChild(n);nodes.push(n)})(i);
+  function nextLevel(){
+    if(!grid.isConnected)return;
+    level++;var nx;do{nx=Math.random()*9|0}while(seq.length&&nx===seq[seq.length-1]);seq.push(nx);inp=0;lock=true;
+    $('#trLv',body).textContent='HOP '+level;st.textContent='watch…';grid.classList.add('show');
+    var k=0,on=Math.max(190,420-level*22);
+    (function show(){
+      if(!grid.isConnected)return;
+      if(k>=seq.length){lock=false;grid.classList.remove('show');st.textContent='your turn · '+seq.length+' hop'+(seq.length>1?'s':'');return}
+      var n=nodes[seq[k++]];n.classList.add('lit');
+      setTimeout(function(){n.classList.remove('lit');setTimeout(show,150)},on);
+    })();
+  }
+  function tap(i,n){
+    if(lock)return;
+    if(i!==seq[inp]){lock=true;n.classList.add('bad');sfx('bad');nodes[seq[inp]].classList.add('lit');setTimeout(done,800);return}
+    n.classList.add('ok');setTimeout(function(){n.classList.remove('ok')},180);
+    inp++;st.textContent=inp+'/'+seq.length;
+    if(inp===seq.length){lock=true;st.textContent='route confirmed';sfx('ok');setTimeout(nextLevel,650)}
+  }
+  function done(){
+    if(!grid.isConnected)return;
+    var cleared=level-1,xp=Math.min(60,cleared*4),best=LS.j('grid:best:trace',0);if(cleared>best){LS.sj('grid:best:trace',cleared);best=cleared}
+    if(xp>0)addXP(xp,'trace route');if(cleared>=4){bumpQuest('play');GE('win')}
+    gameEnd(body,b,{title:cleared>=4?'ROUTE MAPPED':'PACKET DROPPED',cls:cleared>=4?'ok':'bad',big:cleared+' hop'+(cleared===1?'':'s'),line:'+'+xp+' XP · best '+best+' · 4 hops counts as a win',again:function(){playTrace(body,b)}});
+  }
+  setTimeout(nextLevel,500);
+}
+GAMES.push(
+ {id:'signal',ic:'',t:'Signal Lock',d:'Stop the sweep inside a shrinking band. Five rounds, dead centre pays double.',play:playSignal},
+ {id:'trace',ic:'',t:'Trace Route',d:'Watch a packet hop across the mesh, then replay the route from memory.',play:playTrace}
+);
+</script>

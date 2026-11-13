@@ -1,0 +1,78 @@
+
+<canvas id="rain" aria-hidden="true"></canvas>
+
+<div id="boot" role="status">
+  <h1>NEXUS // GRID</h1>
+  <p class="tag1">your phone, turned hacker workstation</p>
+  <pre id="bootlog"></pre>
+  <div class="bar"><i id="bootbar"></i></div>
+  <small>TAP TO SKIP</small>
+</div>
+
+<header id="top">
+  <span class="brand">◈ NEXUS</span>
+  <span class="st"><span class="led"></span>GRID <b id="tMode">LOCAL</b></span>
+  <span class="st hide-s">NET <b id="tNet">--</b></span>
+  <span class="st hide-s">OPS <b id="tOps">0</b></span>
+  <span class="sp"></span>
+  <button id="tPal" type="button" aria-label="Command palette"><span id="tPalIc"></span><span class="hide-s">jump to…</span><kbd class="hide-s">/</kbd></button>
+  <button class="xp" id="tXp" type="button" title="Your profile">⬡ <b id="tRank">NEWB</b> <span id="tXpN">0xp</span></button>
+  <span id="clock">--:--</span>
+</header>
+
+<main id="desk">
+  <div class="home">
+    <section>
+      <div class="hero">
+        <div>
+          <div class="big" id="hClock">--:--</div>
+          <div class="date" id="hDate">--</div>
+          <div class="sys" id="hSys" title="unix time · hex · binary clock"></div>
+        </div>
+        <div class="hi" id="hHi">wake up, operator…</div>
+      </div>
+      <div class="card" style="margin-top:8px">
+        <h4><span id="hRank">RANK // NEWB</span><span id="hXp">0 / 100 XP</span></h4>
+        <div class="track"><div class="fill amber" id="hXpBar"></div></div>
+      </div>
+      <div class="card" id="startcard" style="margin-top:8px" hidden></div>
+      <div id="icons"></div>
+    </section>
+    <aside class="side">
+      <div class="card"><h4><span>▚ DAILY OPS</span><span id="streak" title="daily streak">0</span></h4><div id="quests"></div></div>
+      <div class="card"><h4><span>▚ GRID ACTIVITY</span><button class="btn sm ghost" type="button" data-open="feed">open</button></h4><div id="hFeed"></div></div>
+      <div class="card"><h4><span>▚ SYSTEM</span><span class="mu">BROWSER</span></h4><div id="sysmon"></div></div>
+    </aside>
+  </div>
+</main>
+
+<nav id="task" aria-label="Taskbar">
+  <button id="startbtn" type="button">⬢ APPS</button>
+  <div id="tasks"></div>
+  <div id="tray">NEXUS GRID v7.0<br><span id="up">UP 00:00:00</span></div>
+</nav>
+
+<div id="start" hidden>
+  <div class="hd"><span>APPLICATION LAUNCHER</span><span class="blink">_</span></div>
+  <input id="startq" placeholder="search apps…" autocomplete="off" aria-label="Search apps">
+  <div id="smlist"></div>
+</div>
+
+<div id="modal" hidden><div class="box" id="mbox"></div></div>
+<div id="crt" hidden aria-hidden="true"></div>
+<div id="pal" hidden>
+  <div class="palbox" role="dialog" aria-label="Command palette">
+    <div class="palin"><span id="palIc"></span><input id="palq" placeholder="jump to an app, a game, a course, a theme…" autocomplete="off" aria-label="Search commands"><kbd>ESC</kbd></div>
+    <div id="pallist"></div>
+    <div class="palft"><span>↑↓ move</span><span>↵ run</span><span>anything else → ask ORACLE</span></div>
+  </div>
+</div>
+<div id="rankup" hidden>
+  <div class="ruin">
+    <svg class="ruhex" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 4 90 27v46L50 96 10 73V27z"/><path class="in" d="M50 18 78 34v32L50 82 22 66V34z"/></svg>
+    <div class="rul">RANK UP</div>
+    <div class="run" id="ruName">OPERATOR</div>
+    <div class="rus" id="ruSub"></div>
+  </div>
+</div>
+<div id="toast" role="status"></div>

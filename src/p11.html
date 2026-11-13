@@ -1,0 +1,210 @@
+<script>
+/* ================= THEME ENGINE (fully customizable, live recolor) ================= */
+function hx(hex){hex=hex.replace('#','');if(hex.length===3)hex=hex.split('').map(function(c){return c+c}).join('');return hex}
+function hexA(hex,a){var n=parseInt(hx(hex),16);return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')'}
+function lighten(hex,amt){var h=hx(hex),r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),bl=parseInt(h.slice(4,6),16);amt=amt==null?.42:amt;
+  return 'rgb('+Math.round(r+(255-r)*amt)+','+Math.round(g+(255-g)*amt)+','+Math.round(bl+(255-bl)*amt)+')'}
+var THEMES={
+ phosphor:{name:'Phosphor',accent:'#00ff7b',rain:'#00b85a'},
+ ember:{name:'Ember',accent:'#ff8c2b',rain:'#c2560f'},
+ ghostwire:{name:'Ghostwire',accent:'#35e3ff',rain:'#1593c2'},
+ ultraviolet:{name:'Ultraviolet',accent:'#b48cff',rain:'#6d3fd0'},
+ crimson:{name:'Crimson',accent:'#ff4d6d',rain:'#b01030'},
+ bone:{name:'Bone',accent:'#d7eadf',rain:'#7f9a8c'}
+};
+function shade(hex,amt){var h=hx(hex),o='#';for(var i=0;i<6;i+=2){o+=('0'+Math.round(parseInt(h.slice(i,i+2),16)*(1-amt)).toString(16)).slice(-2)}return o}
+/* one place that recolors the whole UI from a single accent */
+function setAccentVars(a){
+  var r=document.documentElement.style,n=parseInt(hx(a).slice(0,6),16);
+  r.setProperty('--acc',((n>>16)&255)+','+((n>>8)&255)+','+(n&255));
+  r.setProperty('--green',a);r.setProperty('--green-soft',lighten(a,.38));
+  r.setProperty('--edge',hexA(a,.22));r.setProperty('--hair',hexA(a,.15));
+  r.setProperty('--glow','0 0 12px '+hexA(a,.28));r.setProperty('--deep',hexA(a,.15));r.setProperty('--dim',shade(a,.36));
+}
+function applyTheme(id,quiet){
+  if(id==='custom'){setAccentVars(safeColor(ME.color));return}
+  var t=THEMES[id]||THEMES.phosphor,a=t.accent;
+  setAccentVars(a);
+  ME.theme=THEMES[id]?id:'phosphor';ME.color=a;if(typeof RAIN!=='undefined'){RAIN.color=t.rain;saveRain();if(typeof applyRain==='function')applyRain()}
+  saveMe();if(!quiet)toast('theme · '+t.name);
+}
+function applyAccent(c){
+  c=safeColor(c);if(c.length!==7)c='#'+hx(c).slice(0,6);
+  ME.color=c;ME.theme='custom';setAccentVars(c);
+  if(typeof RAIN!=='undefined'){RAIN.color=shade(c,.3);saveRain();if(typeof applyRain==='function')applyRain()}
+  saveMe();if(typeof paintProfileBits==='function')paintProfileBits();
+}
+
+/* ================= COMPANION BACKEND (local Ollama + memory + robot) ================= */
+var ORA=Object.assign({backend:'auto',ollama:'http://127.0.0.1:11434',model:'llama3.2:1b',robot:''},LS.j('grid:ora',{}));
+function saveOra(){LS.sj('grid:ora',ORA)}
+function oraMem(){return LS.j('grid:oramem',[])}
+function oraMemAdd(f){var m=oraMem();f=(f||'').trim();if(f&&m.indexOf(f)<0){m.push(f);LS.sj('grid:oramem',m.slice(-80))}}
+function oraMemDel(i){var m=oraMem();m.splice(i,1);LS.sj('grid:oramem',m)}
+function oraPickBackend(){if(ORA.backend==='claude')return CAP.sample?'claude':'offline';if(ORA.backend==='local')return 'local';if(ORA.backend==='offline')return 'offline';return CAP.sample?'claude':'auto'}
+function oraSystem(){
+  var mem=oraMem(),s="You are ORACLE, @"+ME.handle+"'s personal companion inside NEXUS GRID — direct, warm, a little hacker-confident, concise. You help with ethical security (own systems/labs only — refuse illegal targeting), coding, Termux, ESP32/Raspberry-Pi robotics, and life. Use markdown and ```code``` when it helps.";
+  if(mem.length)s+="\n\nWhat you remember about @"+ME.handle+" (use it naturally):\n- "+mem.join("\n- ");
+  if(ORA.robot)s+="\n\nYou can drive a physical robot. When a physical action is clearly wanted, append ONE tag at the very end like [[do:wave]] or [[do:forward]] — simple verbs only.";
+  s+="\n\nLive status of @"+ME.handle+": "+oraStats()+".";
+  s+="\nYou can also drive the NEXUS interface. Only when the user asks for the action, append tags at the very END of your reply: [[open:APP]] (apps: "+APP_ORDER.map(function(a){return APPS[a].name}).join(', ')+"), [[theme:ID]] (themes: "+Object.keys(THEMES).join(', ')+"), [[rain:on]] or [[rain:off]], [[draft:TEXT]] to prefill a GRID post they will review before sending. Never invent other tags. Never act unasked.";
+  return s;
+}
+async function ollamaChat(messages,sys){
+  var msgs=[{role:'system',content:sys}].concat(messages);
+  var ctl=new AbortController(),t=setTimeout(function(){ctl.abort()},45000);
+  try{
+    var r=await fetch(ORA.ollama.replace(/\/$/,'')+'/api/chat',{method:'POST',signal:ctl.signal,
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({model:ORA.model,messages:msgs,stream:false})});
+    clearTimeout(t);if(!r.ok)throw new Error('ollama HTTP '+r.status);
+    var d=await r.json();ORA.alive=true;return (d.message&&d.message.content)||d.response||'';
+  }catch(e){clearTimeout(t);throw e}
+}
+async function robotDo(action){try{if(ORA.robot)await fetch(ORA.robot.replace(/\/$/,'')+'/do',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:action})})}catch(e){}}
+
+/* ================= FLASHES (Snapchat-style ephemeral, vanish in 24h) ================= */
+function flashLocal(){return LS.j('grid:flash',[])}
+function flashSave(x){LS.sj('grid:flash',x)}
+function flashActive(arr){var cut=now()-86400e3;return (arr||[]).filter(function(f){return f.t>cut}).sort(function(a,b){return b.t-a.t})}
+var flashState={items:null,sub:null};
+APPS.flash={name:'Flashes',icon:'👻',cat:'Social',w:480,h:580,
+ render:function(b){
+   b.innerHTML='<h3 class="h">FLASHES</h3><div class="sub">quick signals that vanish in 24h · no record, no pressure</div><div class="localnote">LOCAL MODE · saved on this device only. Nobody else sees this until the GRID is live.</div>'+
+     '<div class="composer"><textarea class="in" id="flTxt" placeholder="drop a flash… gone in a day"></textarea><div class="row" style="justify-content:flex-end"><button class="btn pri" id="flGo" type="button">flash it</button></div></div>'+
+     '<div class="col" id="flList" style="margin-top:12px"></div>';
+   $('#flGo',b).onclick=function(){var t=$('#flTxt',b).value.trim();if(!t)return toast('type a flash first');
+     flashAdd({id:'u'+now().toString(36),h:ME.handle,c:ME.color,txt:t,t:now()});$('#flTxt',b).value='';addXP(4,'dropped a flash')};
+   flashSub();
+ },onClose:function(){if(flashState.sub){try{flashState.sub()}catch(e){}flashState.sub=null}}};
+function flashAdd(f){
+  if(CAP.db){CAP.db.collection('flashes').doc(f.id).set(f).catch(function(){})}
+  else{var x=flashLocal();x.unshift(f);flashSave(x);flashState.items=x;flashRender()}
+}
+function flashSub(){
+  if(CAP.db){if(flashState.sub)return;
+    try{flashState.sub=CAP.db.collection('flashes').orderBy('t','desc').limit(60).onSnapshot(function(snap){
+      var items=snap.docs.map(function(d){return d.data()});
+      if(!items.length){flashLocal().forEach(function(f){CAP.db.collection('flashes').doc(f.id).set(f).catch(function(){})})}
+      flashState.items=items;flashRender();},function(){flashState.items=flashLocal();flashRender()})}catch(e){flashState.items=flashLocal();flashRender()}
+  }else{flashState.items=flashLocal();flashRender()}
+}
+function flashRender(){
+  var box=$('#flList');if(!box)return;var items=flashActive(flashState.items||flashLocal());
+  box.innerHTML='';
+  if(!items.length){box.innerHTML='<div class="empty">no active flashes — drop one</div>';return}
+  items.forEach(function(f){var left=Math.max(0,24-((now()-f.t)/3600e3)),node=el('div','flashcard');
+    node.innerHTML='<div class="row" style="gap:8px;align-items:center">'+avatar(f.h,f.c)+'<b class="handle">@'+esc(f.h)+'</b><span class="when" style="margin-left:auto">vanishes in '+(left<1?Math.round(left*60)+'m':Math.round(left)+'h')+'</span></div><div class="bodytxt" style="margin-top:6px">'+md(f.txt)+'</div>';
+    box.appendChild(node)});
+}
+
+/* ================= BLUEPRINTS (DIY build library: phone → breadboard → Pi → humanoid) ================= */
+var BLUEPRINTS=[
+ {id:'bb101',ic:'blueprint',t:'Breadboard 101',diff:'beginner',time:'20 min',
+  parts:['Breadboard','1 LED','1 × 220Ω resistor','Jumper wires','3V–5V supply (or ESP32 3V3 pin)'],
+  steps:[
+   {t:'How a breadboard works',b:"The two long rails on the edges are **power** (+) and **ground** (−). The inner rows of 5 holes are connected **horizontally** in each half. Components bridge the center gap."},
+   {t:'Light an LED safely',b:"Current flows + → resistor → LED long leg (anode) → LED short leg (cathode) → −. The resistor caps current so the LED doesn't burn out.\n\n```\n[+] ── 220Ω ──▶|── [−]\n            LED\n```"},
+   {t:'Ohm’s law check',b:"**V = I × R.** With 3.3V, a 220Ω resistor and a ~2V LED drop: I = (3.3−2)/220 ≈ **6 mA** — safe and bright. Never wire an LED without a resistor."}]},
+ {id:'brain',ic:'companion',t:'Phone → Robot Brain',diff:'intermediate',time:'1 hr',
+  parts:['Android phone + Termux','termux-api','Ollama (small model)','Your robot body (ESP32/Pi)'],
+  steps:[
+   {t:'Put the brain on the phone',b:"Run Ollama in Termux (proot-Ubuntu) with a 1B model — see the Ollama answer in your notes. The phone becomes the cortex; it thinks, your robot moves."},
+   {t:'Talk to it from NEXUS',b:"Open **ORACLE → setup**, set the backend to **Local model** and point it at `http://127.0.0.1:11434`. Now ORACLE runs on *your* model, offline."},
+   {t:'Emit robot commands',b:"Set a **robot URL** in ORACLE. Ask it to act and it appends a tag like `[[do:wave]]`; NEXUS POSTs `{action:'wave'}` to `<robot>/do`. Your robot server maps actions to servo moves.\n\n```python\n# on the robot (Flask)\n@app.post('/do')\ndef do():\n    act=request.json['action']\n    MOVES.get(act, lambda:None)()\n    return {'ok':True}\n```"}]},
+ {id:'servo',ic:'robot',t:'ESP32 + PCA9685 Servos',diff:'intermediate',time:'1–2 hr',
+  parts:['ESP32','PCA9685 16-ch driver','Servos (SG90/MG996R)','Separate 5–6V servo supply','Common ground'],
+  steps:[
+   {t:'Why a driver board',b:"GPIO pins can't power servos — they stall and brown-out the board. The **PCA9685** drives 16 servos over I²C from its own 5–6V supply. **Share ground** between ESP32 and the servo supply or nothing works."},
+   {t:'Wire it',b:"ESP32 SDA→PCA SDA, SCL→SCL, 3V3→VCC (logic), GND→GND. Servo power V+ from the **separate** 5–6V. Servos plug into channel headers."},
+   {t:'Drive a servo (MicroPython)',b:"```python\nfrom machine import I2C, Pin\nfrom pca9685 import PCA9685   # ulab/pca driver\ni2c=I2C(0, scl=Pin(22), sda=Pin(21))\npca=PCA9685(i2c); pca.freq(50)\n# ~1ms..2ms pulse = 0..180 deg\npca.duty(0, 307)   # center-ish\n```"}]},
+ {id:'pi',ic:'computer',t:'Raspberry Pi Humanoid Brain',diff:'advanced',time:'a weekend',
+  parts:['Raspberry Pi 5 (8GB+)','Active cooler','Camera + USB mic','Ollama','PCA9685 + servos'],
+  steps:[
+   {t:'The brain',b:"Pi 5 runs Ollama faster than a phone (1B ≈ 9–14 tok/s). Install it, pull a small model, and run the `/do` server from the Phone-Brain blueprint right on the Pi."},
+   {t:'Senses',b:"Camera for vision, USB mic for voice. Pipe mic → speech-to-text → your model, and model → TTS → speaker. Keep the fast balance/servo loop separate from the slow 'think' loop."},
+   {t:'The two-loop rule',b:"**Fast loop** (servos/balance, 50–100Hz): no AI. **Slow loop** (Ollama, every few seconds): decides intent and sends goals down. Never block motion on inference."}]},
+ {id:'link',ic:'bolt',t:'Phone ↔ ESP32 Link',diff:'intermediate',time:'45 min',
+  parts:['Phone (Termux)','ESP32','USB-OTG cable or shared Wi-Fi'],
+  steps:[
+   {t:'Pick a channel',b:"**USB serial** (OTG) is simplest and most reliable. **Wi-Fi** (ESP32 runs a tiny web server) is wireless but needs the same network. **BLE** is lowest power."},
+   {t:'Wi-Fi command server on ESP32',b:"```python\n# MicroPython: ESP32 listens for moves\nimport socket\ns=socket.socket(); s.bind(('',80)); s.listen(1)\nwhile True:\n    c,_=s.accept(); req=c.recv(256)\n    if b'/forward' in req: drive_forward()\n    c.send(b'HTTP/1.0 200 OK\\r\\n\\r\\nok'); c.close()\n```"},
+   {t:'Fire it from NEXUS',b:"In **ORACLE**, set the robot URL to the ESP32's IP (e.g. `http://192.168.1.50`). Actions POST straight to the board."}]},
+ {id:'voice',ic:'media',t:'Give Your Robot a Voice',diff:'beginner',time:'30 min',
+  parts:['Termux + termux-api (phone brain)','or Pi + espeak/piper','Speaker'],
+  steps:[
+   {t:'Make it speak',b:"On a phone brain: `termux-tts-speak \"systems online, operator\"`. On a Pi: `espeak` for quick-and-robotic, or **Piper** for a natural voice."},
+   {t:'Make it listen',b:"Capture a few seconds of mic, run speech-to-text (Vosk runs offline on a Pi), feed the text to Ollama, speak the reply. That loop is a talking companion."},
+   {t:'Personality',b:"ORACLE's **memory** is the personality layer — the more you tell it, the more it sounds like *your* robot. It's growing context, not retraining, but it genuinely gets better for you over time."}]}
+];
+var blueState={};
+APPS.blueprint={name:'Blueprints',icon:'📐',cat:'Build',w:640,h:600,
+ render:function(b){blueHome(b)}};
+function blueHome(b){
+  b.innerHTML='<h3 class="h">BLUEPRINTS</h3><div class="sub">real DIY builds — breadboard to humanoid. parts, wiring &amp; code you can actually run.</div><div class="grid2" id="blGrid"></div>';
+  var g=$('#blGrid',b);
+  BLUEPRINTS.forEach(function(p){var card=el('button','course');card.type='button';
+    card.innerHTML='<div class="tile-ic">'+ic(p.ic,'ic-lg')+'</div><div class="ttl">'+esc(p.t)+'</div><div class="mu" style="font-size:11px;flex:1">'+p.steps.length+' steps · '+esc(p.time)+'</div><span class="tag '+(p.diff==='beginner'?'':p.diff==='advanced'?'v':'a')+'">'+p.diff+'</span>';
+    card.onclick=function(){blueOpen(b,p)};g.appendChild(card)});
+}
+function blueOpen(b,p){
+  b.innerHTML='<button class="btn ghost sm" id="blBack" type="button">◄ blueprints</button><h3 class="h" style="margin-top:8px">'+esc(p.t)+'</h3><div class="sub">'+esc(p.diff)+' · '+esc(p.time)+'</div>'+
+    '<div class="card"><h4><span>PARTS</span></h4><div>'+p.parts.map(function(x){return '<span class="tag">'+esc(x)+'</span>'}).join('')+'</div></div>'+
+    '<div class="col" id="blSteps"></div>';
+  $('#blBack',b).onclick=function(){blueHome(b)};
+  var S=$('#blSteps',b);
+  p.steps.forEach(function(s,i){var c=el('div','card');c.innerHTML='<h4><span>STEP '+(i+1)+' · '+esc(s.t)+'</span></h4><div class="lesson">'+md(s.b)+'</div>';S.appendChild(c)});
+  var done=el('button','btn pri sm');done.type='button';done.textContent='mark built +20xp';done.style.marginTop='4px';
+  done.onclick=function(){if(!blueState[p.id]){blueState[p.id]=1;addXP(20,'built: '+p.t);toast('logged — nice build')}};
+  S.appendChild(done);
+}
+</script>
+<script>
+/* ================= CODEX — view NEXUS's own code, live ================= */
+var codexState={on:false,timer:null,obs:null,sig:''};
+function codexSig(s){var h=0;for(var i=0;i<s.length;i+=997)h=(h+s.charCodeAt(i)*31)>>>0;return s.length+':'+h}
+APPS.codex={name:'Codex',icon:'code',cat:'You',w:760,h:640,flush:true,
+ render:function(b,win){
+   b.innerHTML='<div class="codexbar">'+
+     '<input class="in" id="cxQ" placeholder="search the source…" style="flex:1;min-width:0" autocomplete="off">'+
+     '<button class="btn sm ghost" id="cxLive" type="button" title="auto-update as the app runs">● LIVE</button>'+
+     '<button class="btn sm ghost" id="cxCopy" type="button">copy</button></div>'+
+     '<div class="codexmeta" id="cxMeta">reading…</div>'+
+     '<div class="codexchips"><button class="chip2" data-q="function " type="button">functions</button><button class="chip2" data-q="APPS." type="button">apps</button><button class="chip2" data-q="&lt;style" type="button">styles</button><button class="chip2" data-q="ICONS=" type="button">icons</button><button class="chip2" data-q="" type="button">all</button></div>'+
+     '<div class="codexbody"><pre id="cxPre" class="codepre"></pre></div>';
+   var src='';
+   function snap(force){
+     // snapshot a clone with the Codex window itself removed — otherwise the viewer would show its own
+     // output and the source would grow on every refresh
+     var c=document.documentElement.cloneNode(true),mine=c.querySelector('.win[data-app="codex"]');if(mine)mine.remove();
+     var s='<!doctype html>\n'+c.outerHTML;
+     var sig=codexSig(s);
+     if(!force&&sig===codexState.sig)return; codexState.sig=sig;src=s;paint();
+   }
+   function hl(s){return s
+     .replace(/(&lt;\/?[A-Za-z][\w-]*)/g,'<i class="c-tag">$1</i>')
+     .replace(/(&quot;[^&]*?&quot;|&#39;[^&]*?&#39;)/g,'<i class="c-str">$1</i>');}
+   function paint(){
+     var q=($('#cxQ',b).value||'').toLowerCase(),lines=src.split('\n'),out=[],shown=0;
+     for(var i=0;i<lines.length;i++){
+       if(q&&lines[i].toLowerCase().indexOf(q)<0)continue;
+       out.push('<span class="ln">'+(i+1)+'</span>'+(hl(esc(lines[i]))||' '));shown++;
+     }
+     var sc=$('.codexbody',b),keep=sc?sc.scrollTop:0;
+     $('#cxPre',b).innerHTML=out.join('\n')||'<span class="mu">no matches</span>';
+     if(sc)sc.scrollTop=keep;
+     $('#cxMeta',b).textContent=lines.length+' lines · '+Math.round(src.length/1024)+' KB · '+shown+' shown · '+(codexState.on?'live ':'snapshot ')+new Date().toLocaleTimeString();
+   }
+   $('#cxQ',b).addEventListener('input',paint);
+   $$('.chip2',b).forEach(function(c){c.onclick=function(){$('#cxQ',b).value=c.dataset.q.replace(/&lt;/g,'<');paint()}});
+   $('#cxCopy',b).onclick=function(){if(typeof copyCmd==='function')copyCmd(src);else toast('copy unavailable')};
+   $('#cxLive',b).onclick=function(){
+     codexState.on=!codexState.on;this.classList.toggle('on',codexState.on);
+     if(codexState.on){codexState.timer=setInterval(function(){snap(false)},1500);
+       try{codexState.obs=new MutationObserver(function(ms){if(win&&ms.every(function(m){return win.contains(m.target)}))return;clearTimeout(codexState.dob);codexState.dob=setTimeout(function(){snap(false)},500)});codexState.obs.observe(document.body,{subtree:true,childList:true,attributes:true})}catch(e){}
+       toast('live view on — code updates as you use NEXUS')}
+     else{clearInterval(codexState.timer);if(codexState.obs){codexState.obs.disconnect();codexState.obs=null}}
+   };
+   snap(true);
+ },
+ onClose:function(){codexState.on=false;if(codexState.timer)clearInterval(codexState.timer);if(codexState.obs){codexState.obs.disconnect();codexState.obs=null}}};
+</script>

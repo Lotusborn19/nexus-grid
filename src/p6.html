@@ -1,0 +1,173 @@
+<script>
+/* ================= APP REGISTRY ================= */
+var APPS={},APP_ORDER=['feed','flash','crews','suggest','academy','blueprint','games','sandbox','control','automate','shell','system','bridge','profile','friends','news','market','ai','notes','codex','guard','settings'];
+
+/* ---------- FEED (the GRID) ---------- */
+var feedState={items:null,sub:null};
+function feedLocal(){return LS.j('grid:feed',[])}
+function feedSaveLocal(x){LS.sj('grid:feed',x)}
+var feedLive=null;
+APPS.feed={name:'The GRID',icon:'🛰️',cat:'Social',w:600,h:600,
+ render:function(b){
+   b.innerHTML='<h3 class="h">THE GRID</h3><div class="sub">the feed for people who build and break things · post a writeup, a win, a drop</div><div class="localnote">LOCAL MODE · saved on this device only. Nobody else sees this until the GRID is live.</div>'+
+     '<div class="composer"><textarea class="in" id="fTxt" placeholder="share a writeup, a CTF win, a tool drop… (markdown + ```code``` ok)"></textarea>'+
+     '<div class="row"><input class="in" id="fTags" placeholder="tags: web, htb, esp32" style="flex:1;min-width:120px"><button class="btn pri" id="fPost" type="button">TRANSMIT</button></div></div>'+
+     '<div class="tabs" id="fBar" style="margin:12px 0 0"></div><div id="fList" class="col" style="margin-top:10px"></div>';
+   $('#fPost',b).onclick=function(){
+     var txt=$('#fTxt',b).value.trim();if(!txt)return toast('write something first');
+     var post={id:'u'+now().toString(36),h:ME.handle,c:ME.color,t:now(),txt:txt,
+       tags:$('#fTags',b).value.split(',').map(function(s){return s.trim()}).filter(Boolean),likes:0,likers:[],cmts:[]};
+     feedAdd(post);GE('post');$('#fTxt',b).value='';$('#fTags',b).value='';
+     addXP(10,'posted to the GRID');bumpQuest('post');
+   };
+   feedRender();feedLive();
+ }};
+function feedRender(){
+  var list=$('#fList');if(!list)return;
+  var items=feedState.items||feedLocal(),top=feedState.sort==='top',tag=feedState.tag||'';
+  items=items.slice().sort(top?function(a,b){return (likeN(b)+(b.cmts||[]).length*2)-(likeN(a)+(a.cmts||[]).length*2)||b.t-a.t}:function(a,b){return b.t-a.t});
+  if(tag)items=items.filter(function(p){return (p.tags||[]).indexOf(tag)>=0});
+  var bar=$('#fBar');
+  if(bar){bar.innerHTML='<button class="tab'+(top?'':' on')+'" type="button" data-s="new">LATEST</button><button class="tab'+(top?' on':'')+'" type="button" data-s="top">TOP</button>'+(tag?'<button class="tab on" type="button" data-s="clr">#'+esc(tag)+' ✕</button>':'');
+    $$('button',bar).forEach(function(x){x.onclick=function(){var s=x.dataset.s;if(s==='clr')feedState.tag='';else feedState.sort=s;feedRender()}})}
+  list.innerHTML='';
+  if(!items.length){list.innerHTML='<div class="empty">'+(tag?'nothing tagged #'+esc(tag)+' yet':'no transmissions yet — be the first')+'</div>';return}
+  items.forEach(function(p){list.appendChild(postNode(p))});
+}
+/* likes are per-person: a frozen seed count + the ids of people who liked it */
+function likeN(p){return (p.likes||0)+((p.likers||[]).length)}
+function iLike(p){return (p.likers||[]).indexOf(myVoterId())>=0}
+function postNode(p){
+  var n=el('div','post');
+  n.innerHTML='<div class="meta">'+avatar(p.h,p.c)+'<div class="who"><div class="handle">@'+esc(p.h)+'</div><div class="when">'+ago(p.t)+(p.tags&&p.tags.length?' · '+p.tags.map(function(t){return '<button type="button" class="hash" data-tag="'+esc(t)+'">#'+esc(t)+'</button>'}).join(' '):'')+'</div></div></div>'+
+    '<div class="bodytxt">'+md(p.txt)+'</div>'+
+    '<div class="acts"><button type="button" data-a="like" class="'+(iLike(p)?'on':'')+'">▲ '+likeN(p)+'</button>'+
+    '<button type="button" data-a="cmt">'+ic('chat')+' '+(p.cmts?p.cmts.length:0)+'</button>'+
+    (p.h===ME.handle?'<button type="button" data-a="del">✕ delete</button>':'<button type="button" data-a="fr">+ follow</button>')+'</div>'+
+    '<div class="col" data-cmts hidden></div>';
+  var cbox=$('[data-cmts]',n);
+  $$('.acts button',n).forEach(function(bn){bn.onclick=function(){
+    var a=bn.dataset.a;
+    if(a==='like'){var L=(p.likers||[]).slice(),me=myVoterId(),k=L.indexOf(me);if(k>=0)L.splice(k,1);else{L.push(me);addXP(1,'');GE('like')}
+      p.likers=L;delete p.liked;feedUpdate(p);bn.className=iLike(p)?'on':'';bn.textContent='▲ '+likeN(p)}
+    else if(a==='del'){feedDel(p.id)}
+    else if(a==='fr'){addFriend(p.h,p.c);toast('following @'+p.h)}
+    else if(a==='cmt'){cbox.hidden=!cbox.hidden;if(!cbox.hidden)paintCmts(cbox,p)}
+  }});
+  $$('.hash',n).forEach(function(h){h.onclick=function(){feedState.tag=h.dataset.tag;feedRender()}});
+  return n;
+}
+function paintCmts(box,p){
+  box.innerHTML='';(p.cmts||[]).forEach(function(c){box.appendChild(el('div','cmt','<b class="handle">@'+esc(c.h)+'</b> '+md(c.txt)+' <span class="when">'+ago(c.t)+'</span>'))});
+  var row=el('div','row');row.innerHTML='<input class="in" placeholder="reply…" style="flex:1"><button class="btn sm" type="button">send</button>';
+  var inp=$('input',row);$('button',row).onclick=function(){var v=inp.value.trim();if(!v)return;
+    p.cmts=p.cmts||[];p.cmts.push({h:ME.handle,txt:v,t:now()});feedUpdate(p);paintCmts(box,p);addXP(3,'')};
+  box.appendChild(row);
+}
+/* feed persistence: db when present, else local */
+function feedAdd(p){
+  if(CAP.db){CAP.db.collection('feed').doc(p.id).set(p).catch(function(){});}
+  else{var x=feedLocal();x.unshift(p);feedSaveLocal(x);feedState.items=x;feedRender();paintHomeFeed()}
+}
+function feedUpdate(p){
+  if(CAP.db){CAP.db.collection('feed').doc(p.id).set(p).catch(function(){});}
+  else{var x=(feedState.items||feedLocal()).map(function(i){return i.id===p.id?p:i});feedSaveLocal(x);feedState.items=x}
+}
+function feedDel(id){
+  if(CAP.db){CAP.db.collection('feed').doc(id).delete().catch(function(){});}
+  else{var x=(feedState.items||feedLocal()).filter(function(i){return i.id!==id});feedSaveLocal(x);feedState.items=x;feedRender();paintHomeFeed()}
+}
+feedLive=function(){
+  if(!CAP.db){feedState.items=feedLocal();feedRender();paintHomeFeed();return}
+  if(feedState.sub)return;
+  try{feedState.sub=CAP.db.collection('feed').orderBy('t','desc').limit(100).onSnapshot(function(snap){
+    var items=snap.docs.map(function(d){return d.data()}).filter(function(p){
+      if(SEED_IDS[p.id]){dbDrop('feed',p.id);return false}return true});   // only posts real people wrote
+    feedState.items=items;feedRender();paintHomeFeed();
+  },function(){feedState.items=feedLocal();feedRender()})}catch(e){feedState.items=feedLocal();feedRender()}
+};
+function paintHomeFeed(){
+  var box=$('#hFeed');if(!box)return;var items=(feedState.items||feedLocal()).slice().sort(function(a,b){return b.t-a.t}).slice(0,3);
+  box.innerHTML=items.map(function(p){return '<div style="padding:6px 0;border-bottom:1px dashed var(--deep);font-size:11px"><b class="handle">@'+esc(p.h)+'</b> <span class="mu">'+ago(p.t)+'</span><br>'+esc(p.txt.slice(0,70))+(p.txt.length>70?'…':'')+'</div>'}).join('')||'<div class="mu" style="font-size:11px">quiet on the wire…</div>';
+}
+
+/* ---------- CREWS (chat) ---------- */
+var CHANS=['#general','#ctf-crew','#web-hacking','#gamedev','#robotics','#esp32','#career'];
+var chatState={chan:'#general',items:{},sub:null};
+APPS.crews={name:'Crews',icon:'💬',cat:'Social',w:620,h:560,flush:true,
+ render:function(b){
+   b.innerHTML='<div class="crewbar" id="crewbar"></div><div class="localnote flushn">LOCAL MODE · saved on this device only. Nobody else sees this until the GRID is live.</div><div class="chat"><div class="chans" id="chans"></div><div class="cmain"><div class="msgs" id="msgs"></div>'+
+     '<div class="cbar"><input class="in" id="cIn" placeholder="message '+chatState.chan+'…" autocomplete="off"><button class="btn pri" id="cSend" type="button">send</button></div></div></div>';
+   var ch=$('#chans',b);CHANS.forEach(function(c){var bn=el('button',c===chatState.chan?'on':'',c);bn.type='button';bn.onclick=function(){chatState.chan=c;$$('#chans button',b).forEach(function(x){x.classList.toggle('on',x.textContent===c)});$('#cIn',b).placeholder='message '+c+'…';chatSub()};ch.appendChild(bn)});
+   var send=function(){var v=$('#cIn',b).value.trim();if(!v)return;$('#cIn',b).value='';chatSend(v)};
+   $('#cSend',b).onclick=send;$('#cIn',b).addEventListener('keydown',function(e){if(e.key==='Enter')send()});
+   chatSub();paintCrewBar();
+ },onFocus:function(){chatSub()}};
+function chatSend(txt){
+  var m={h:ME.handle,c:ME.color,txt:txt,t:now()};
+  if(CAP.db){CAP.db.collection('chat/'+chatState.chan.slice(1)+'/msgs').add(m).catch(function(){});}
+  else{var k='grid:chat:'+chatState.chan;var arr=LS.j(k,[]);arr.push(m);LS.sj(k,arr.slice(-100));chatPaint(arr)}
+  addXP(2,'');bumpQuest('chat');GE('msg');
+}
+function chatSub(){
+  var box=$('#msgs');if(!box)return;
+  if(chatState.sub){try{chatState.sub()}catch(e){}chatState.sub=null}
+  if(CAP.db){
+    try{chatState.sub=CAP.db.collection('chat/'+chatState.chan.slice(1)+'/msgs').orderBy('t','asc').limit(80).onSnapshot(function(snap){
+      chatPaint(snap.docs.map(function(d){return d.data()}))},function(){chatPaint(LS.j('grid:chat:'+chatState.chan,[]))})}catch(e){chatPaint(LS.j('grid:chat:'+chatState.chan,[]))}
+  }else{
+    var arr=LS.j('grid:chat:'+chatState.chan,null);
+    chatPaint(arr||[]);
+  }
+}
+function chatPaint(arr){var box=$('#msgs');if(!box)return;
+  box.innerHTML=arr.map(function(m){return '<div class="msg"><span class="h" style="color:'+safeColor(m.c)+'">@'+esc(m.h)+'</span><span class="t">'+ago(m.t)+'</span><br>'+md(m.txt)+'</div>'}).join('')||'<div class="empty" style="margin:14px">no messages in '+esc(chatState.chan)+' yet \u2014 say something</div>';
+  box.scrollTop=box.scrollHeight;
+}
+
+/* ---------- PROFILE ---------- */
+APPS.profile={name:'Operator',icon:'⬡',cat:'You',w:460,h:600,
+ render:function(b){profileBody=b;paintProfile()}};
+var profileBody=null;
+function paintProfile(){
+  var b=profileBody;if(!b||!openApps.profile)return;
+  var r=rankOf(ME.xp),nx=nextRank(ME.xp);
+  var sk=ME.skills,skNames={web:'Web',network:'Network',mobile:'Mobile',reversing:'Reversing',hardware:'Hardware',crypto:'Crypto'};
+  b.innerHTML='<div style="text-align:center">'+
+      '<div class="av" style="width:72px;height:72px;font-size:26px;margin:0 auto 10px;background:'+ME.color+'">'+esc(ME.handle[0].toUpperCase())+'</div>'+
+      '<div class="handle" style="font-size:18px">@'+esc(ME.handle)+'</div>'+
+      '<div class="rank">⬡ '+r[0].replace('_',' ')+' · '+ME.xp+' XP'+(CAP.me&&CAP.me.id?' · SIGNED IN':'')+'</div>'+
+      (myCrew()?'<div style="font:600 9px var(--display);letter-spacing:3px;margin-top:5px;color:'+myCrew().c+'">'+myCrew().n+'</div>':'')+
+      (ME.bio?'<div class="mu" style="font-size:11px;margin-top:6px">'+esc(ME.bio)+'</div>':'')+
+      (ME.link&&/^https?:\/\//i.test(ME.link)?'<a class="pflink" href="'+esc(ME.link)+'" target="_blank" rel="noopener">'+esc(ME.link.replace(/^https?:\/\//i,''))+' ↗</a>':'')+'</div>'+
+    '<div class="moodbar">'+(ME.mood||'🟢')+' <b>@'+esc(ME.handle)+'</b> '+(ME.status?esc(ME.status):'<span class="mu">is online. set a status below…</span>')+'</div>'+
+    '<div class="card" style="margin-top:4px"><h4><span>PROGRESS</span><span>'+(nx?(nx[1]-ME.xp)+' to '+nx[0].replace('_',' '):'MAX RANK')+'</span></h4>'+
+      '<div class="track"><div class="fill amber" style="width:'+(nx?Math.round((ME.xp-r[1])/(nx[1]-r[1])*100):100)+'%"></div></div></div>'+
+    '<div class="card"><h4><span>WHAT’S ON YOUR MIND</span></h4>'+
+      '<div class="row" id="pfMoods" style="gap:4px;margin-bottom:8px"></div>'+
+      '<textarea class="in" id="pfStatus" placeholder="status update…">'+esc(ME.status||'')+'</textarea>'+
+      '<div class="row" style="margin-top:8px"><button class="btn pri sm" id="pfSetStatus" type="button">set status</button><button class="btn ghost sm" id="pfShare" type="button">share to GRID</button></div></div>'+
+    '<div class="card"><h4><span>TOP 8 FRIENDS</span><span id="pfFrCount"></span></h4><div class="top8" id="pfTop8"></div></div>'+
+    '<div class="card"><h4><span>THE WALL</span><span class="mu">guestbook</span></h4>'+
+      '<div class="row" style="margin-bottom:8px"><input class="in" id="pfWallIn" placeholder="leave a message on the wall…" style="flex:1"><button class="btn pri sm" id="pfWallPost" type="button">post</button></div>'+
+      '<div class="col" id="pfWall"></div></div>'+
+    '<div class="card"><h4><span>SKILL TREE</span></h4>'+Object.keys(skNames).map(function(k){var v=sk[k]||0;return '<div class="skill"><span>'+skNames[k]+'</span><b class="ok">'+v+' xp</b></div><div class="track" style="margin:3px 0 8px"><div class="fill" style="width:'+Math.min(100,v/5)+'%"></div></div>'}).join('')+'</div>'+
+    '<div class="card"><h4><span>BADGES</span><span>'+(ME.badges.length)+'</span></h4><div>'+(ME.badges.length?ME.badges.map(function(x){return '<span class="tag a">'+ic('medal')+' '+esc(x)+'</span>'}).join(''):'<span class="mu" style="font-size:11px">complete quests &amp; labs to earn badges</span>')+'</div></div>'+
+    '<div class="card" id="pfAch"></div>'+
+    '<div class="card"><h4><span>EDIT</span></h4><div class="col">'+
+      '<input class="in" id="pHandle" value="'+esc(ME.handle)+'" placeholder="handle" maxlength="24">'+
+      '<textarea class="in" id="pBio" placeholder="bio — what you build &amp; break">'+esc(ME.bio||'')+'</textarea>'+
+      '<div class="row"><label class="mu" style="font-size:11px">accent</label><input type="color" id="pColor" value="'+ME.color+'" style="width:44px;height:30px;background:none;border:1px solid var(--deep);border-radius:6px"><button class="btn pri" id="pSave" type="button">SAVE</button>'+
+      '<button class="btn warn sm" id="pLink" type="button">link HTB/THM</button></div></div></div>';
+  $('#pSave',b).onclick=function(){var h=$('#pHandle',b).value.trim().replace(/\s+/g,'_');if(h)ME.handle=h;ME.bio=$('#pBio',b).value;var nc=$('#pColor',b).value;if(nc!==ME.color)applyAccent(nc);saveMe();paintProfileBits();tick();toast('profile saved');paintProfile()};
+  $('#pLink',b).onclick=function(){modal('<h3 class="h" style="font-size:14px">LINK A PROFILE</h3><div class="sub">show your public THM / HTB / GitHub profile on your page</div><input class="in" id="lkUrl" placeholder="https://tryhackme.com/p/yourname"><div class="row" style="margin-top:10px"><button class="btn pri" id="lkGo" type="button">save link</button><button class="btn ghost" onclick="this.closest(\'#modal\').hidden=true" type="button">cancel</button></div><div class="mu" style="margin-top:10px;font-size:11px">This saves the link and shows it on your profile. It is not checked or verified.</div>');
+    $('#lkGo').onclick=function(){var u=$('#lkUrl').value.trim();if(!/^https?:\/\/[^\s"'<>]+$/i.test(u))return toast('needs a full https:// link');ME.link=u;saveMe();closeModal();paintProfile()}};
+  var mb=$('#pfMoods',b);if(mb)MOODS.forEach(function(m){var bn=el('button','moodpick'+((ME.mood||'🟢')===m?' on':''),m);bn.type='button';bn.onclick=function(){ME.mood=m;saveMe();$$('#pfMoods .moodpick',b).forEach(function(x){x.classList.remove('on')});bn.classList.add('on')};mb.appendChild(bn)});
+  var ss=$('#pfSetStatus',b);if(ss)ss.onclick=function(){ME.status=$('#pfStatus',b).value.trim();saveMe();toast('status updated');paintProfile()};
+  var sh=$('#pfShare',b);if(sh)sh.onclick=function(){var t=$('#pfStatus',b).value.trim();if(!t)return toast('write a status first');ME.status=t;saveMe();if(typeof feedAdd==='function'){feedAdd({id:'u'+now().toString(36),h:ME.handle,c:ME.color,t:now(),txt:t,tags:['status'],likes:0,likers:[],cmts:[]});addXP(10,'shared to GRID')}toast('posted to the GRID');paintProfile()};
+  var t8=$('#pfTop8',b);if(t8){var fr=friends().slice(0,8);var fc=$('#pfFrCount',b);if(fc)fc.textContent=friends().length;fr.forEach(function(x){var cell=el('button','t8cell');cell.type='button';cell.innerHTML=avatar(x.h,x.c)+'<span class="t8n">@'+esc(x.h)+'</span>'+(x.founder?'<span class="t8tom">★ founder</span>':'');cell.onclick=function(){openApp('friends')};t8.appendChild(cell)})}
+  var wp=$('#pfWallPost',b);if(wp)wp.onclick=function(){var t=$('#pfWallIn',b).value.trim();if(!t)return toast('write something');wallAdd({id:'u'+now().toString(36),owner:wallOwnerId(),from:ME.handle,color:ME.color,txt:t,t:now()});$('#pfWallIn',b).value='';addXP(2,'')};
+  wallSub();
+  var achBox=$('#pfAch',b);if(achBox)achRenderInto(achBox);
+}
+</script>
